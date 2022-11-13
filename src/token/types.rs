@@ -8,6 +8,8 @@ pub enum Token {
     Bang,
     Asterisk,
     Slash,
+    Equal,
+    NotEqual,
     LT,
     GT,
     Comma,

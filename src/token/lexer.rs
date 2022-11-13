@@ -42,10 +42,24 @@ impl<'a> Lexer<'a> {
 
     fn pull_next_token(&mut self, c: char) -> Token {
         match c {
-            '=' => Token::Assignment,
+            '=' => match self.input.peek() {
+                Some('=') => {
+                    // Consume evaluated equal sign
+                    self.next();
+                    return Token::Equal;
+                }
+                _ => Token::Assignment,
+            },
             '+' => Token::Plus,
             '-' => Token::Minus,
-            '!' => Token::Bang,
+            '!' => match self.input.peek() {
+                Some('=') => {
+                    // Consume evaluated bang
+                    self.next();
+                    return Token::NotEqual;
+                }
+                _ => Token::Bang,
+            },
             '*' => Token::Asterisk,
             '/' => Token::Slash,
             '<' => Token::LT,
@@ -144,6 +158,9 @@ mod tests {
             } else {
                 return false;
             }
+
+            10 == 10;
+            10 != 9;
         ";
         let expected = vec![
             Token::Let,
@@ -211,6 +228,14 @@ mod tests {
             Token::False,
             Token::Semicolon,
             Token::RBrace,
+            Token::Integer(10),
+            Token::Equal,
+            Token::Integer(10),
+            Token::Semicolon,
+            Token::Integer(10),
+            Token::NotEqual,
+            Token::Integer(9),
+            Token::Semicolon,
         ];
         assert_tokens(expected, Lexer::new(input));
     }
