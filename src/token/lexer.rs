@@ -6,6 +6,18 @@ pub struct Lexer<'a> {
     pub input: Peekable<Chars<'a>>,
 }
 
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.take_until(|x| !x.is_whitespace());
+        match self.input.next() {
+            Some(c) => Some(self.pull_next_token(c)),
+            None => None,
+        }
+    }
+}
+
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         Lexer {
@@ -32,6 +44,12 @@ impl<'a> Lexer<'a> {
         match c {
             '=' => Token::Assignment,
             '+' => Token::Plus,
+            '-' => Token::Minus,
+            '!' => Token::Bang,
+            '*' => Token::Asterisk,
+            '/' => Token::Slash,
+            '<' => Token::LT,
+            '>' => Token::GT,
             '(' => Token::LParen,
             ')' => Token::RParen,
             '{' => Token::LBrace,
@@ -41,7 +59,7 @@ impl<'a> Lexer<'a> {
             c => {
                 if c.is_alphabetic() {
                     // Capture remainder of alphanumeric word
-                    let word_string = self.concat_until(&c, |x| !is_keyword_char(x));
+                    let word_string = self.concat_until(&c, |x| !is_word_char(x));
                     return map_word_to_token(&word_string);
                 }
                 if c.is_digit(10) {
@@ -58,24 +76,17 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.take_until(|x| !x.is_whitespace());
-        match self.input.next() {
-            Some(c) => Some(self.pull_next_token(c)),
-            None => None,
-        }
-    }
-}
-
 static KEYWORDS: phf::Map<&'static str, Token> = phf::phf_map! {
     "fn" => Token::Function,
-    "let" => Token::Let
+    "let" => Token::Let,
+    "true" => Token::True,
+    "false" => Token::False,
+    "if" => Token::If,
+    "else" => Token::Else,
+    "return" => Token::Return,
 };
 
-fn is_keyword_char(c: &char) -> bool {
+fn is_word_char(c: &char) -> bool {
     c.is_alphanumeric() || c.eq(&'_')
 }
 
@@ -95,7 +106,7 @@ mod tests {
 
     #[test]
     fn symbols_only() {
-        let input = "=+(){},;";
+        let input = "=+(){},;-/*<>";
         let expected = vec![
             Token::Assignment,
             Token::Plus,
@@ -105,6 +116,11 @@ mod tests {
             Token::RBrace,
             Token::Comma,
             Token::Semicolon,
+            Token::Minus,
+            Token::Slash,
+            Token::Asterisk,
+            Token::LT,
+            Token::GT,
         ];
         assert_tokens(expected, Lexer::new(input));
     }
@@ -114,10 +130,20 @@ mod tests {
         let input = "
             let five = 5;
             let ten = 10;
+
             let add = fn(x, y) {
-            x + y;
+                x + y;
             };
+
             let result = add(five, ten);
+            !-/*5;
+            5 < 10 > 5;
+
+            if (5 < 10) {
+                return true;
+            } else {
+                return false;
+            }
         ";
         let expected = vec![
             Token::Let,
@@ -156,6 +182,35 @@ mod tests {
             Token::Identifier(String::from("ten")),
             Token::RParen,
             Token::Semicolon,
+            Token::Bang,
+            Token::Minus,
+            Token::Slash,
+            Token::Asterisk,
+            Token::Integer(5),
+            Token::Semicolon,
+            Token::Integer(5),
+            Token::LT,
+            Token::Integer(10),
+            Token::GT,
+            Token::Integer(5),
+            Token::Semicolon,
+            Token::If,
+            Token::LParen,
+            Token::Integer(5),
+            Token::LT,
+            Token::Integer(10),
+            Token::RParen,
+            Token::LBrace,
+            Token::Return,
+            Token::True,
+            Token::Semicolon,
+            Token::RBrace,
+            Token::Else,
+            Token::LBrace,
+            Token::Return,
+            Token::False,
+            Token::Semicolon,
+            Token::RBrace,
         ];
         assert_tokens(expected, Lexer::new(input));
     }
