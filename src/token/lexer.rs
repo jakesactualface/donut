@@ -13,16 +13,19 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn read_char(&mut self) -> Option<char> {
-        self.input.next()
-    }
-
     fn take_until(&mut self, condition: impl Fn(&char) -> bool) -> Vec<char> {
         let mut taken = Vec::new();
         while let Some(next) = self.input.next_if(|c| !condition(c)) {
             taken.push(next);
         }
         return taken;
+    }
+
+    fn concat_until(&mut self, c: &char, condition: impl Fn(&char) -> bool) -> String {
+        let mut concat_string = vec![c];
+        let rest = self.take_until(condition);
+        concat_string.extend(rest.iter());
+        concat_string.into_iter().collect()
     }
 
     fn pull_next_token(&mut self, c: char) -> Token {
@@ -38,15 +41,16 @@ impl<'a> Lexer<'a> {
             c => {
                 if c.is_alphabetic() {
                     // Capture remainder of alphanumeric word
-                    let mut word = vec![c];
-                    let rest = self.take_until(|x| !is_keyword_char(x));
-                    word.extend(rest.iter());
-                    let word_string: String = word.into_iter().collect();
+                    let word_string = self.concat_until(&c, |x| !is_keyword_char(x));
                     return map_word_to_token(&word_string);
                 }
                 if c.is_digit(10) {
                     // Capture remainder of number
-                    todo!()
+                    let number_string = self.concat_until(&c, |x| !x.is_digit(10));
+                    match usize::from_str_radix(&number_string, 10) {
+                        Ok(x) => return Token::Integer(x),
+                        Err(e) => panic!("Error parsing integer: {}", e),
+                    }
                 }
                 Token::Illegal
             }
