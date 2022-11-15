@@ -41,6 +41,7 @@ impl<'a> Parser<'a> {
     fn parse_statement(&mut self, current_token: Token) -> Option<Statement> {
         match current_token {
             Token::Let => self.parse_let_statement(),
+            Token::Return => self.parse_return_statement(),
             _ => None,
         }
     }
@@ -77,17 +78,21 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_identifier(&mut self) -> Option<Expression> {
-        match self.lexer.next() {
-            Some(Token::Identifier(name)) => {
-                return Some(Expression::Identifier { name });
-            }
-            _ => {
-                self.errors
-                    .push(String::from("Expected identifier not found"));
-                return None;
-            }
+    fn parse_return_statement(&mut self) -> Option<Statement> {
+        // TODO: Skip until the semicolon
+        loop {
+            match self.lexer.peek() {
+                Some(Token::Semicolon) => break,
+                None => panic!("Missing semicolon"),
+                _ => self.lexer.next(),
+            };
         }
+
+        Some(Statement::Return {
+            value: Expression::Identifier {
+                name: String::new(),
+            },
+        })
     }
 }
 
@@ -117,11 +122,34 @@ mod tests {
             match statement {
                 Statement::Let { name, value } => {
                     assert_eq!(expected_identifier, name);
-                    // TODO: Assert expression
+                    // TODO: Assert value expression
                 }
                 _ => {
                     panic!("Statement was not LetStatement!");
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn return_statements_only() {
+        let input = "
+            return 5;
+            return 10;
+            return 993322;
+        ";
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse_program();
+        assert_eq!(Vec::<String>::new(), parser.errors);
+        assert_eq!(3, program.statements.len());
+        for statement in program.statements.iter() {
+            match statement {
+                Statement::Return { value } => {
+                    // TODO: Assert value expression
+                }
+                _ => panic!("Statement was not Return statement!"),
             }
         }
     }
