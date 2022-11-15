@@ -6,12 +6,12 @@ pub trait Node {
 
 pub trait Statement {
     fn node(&self) -> Box<dyn Node>;
-    fn statement(&self) -> Box<dyn Statement>;
+    fn statement(&self);
 }
 
 pub trait Expression {
     fn node(&self) -> Box<dyn Node>;
-    fn expression(&self) -> Box<dyn Expression>;
+    fn expression(&self);
 }
 
 pub struct Program {
@@ -28,19 +28,17 @@ impl Node for Program {
 }
 
 pub struct LetStatement {
-    token: Token,
-    name: Token,
-    value: dyn Expression,
+    pub token: Token,
+    pub name: Token,
+    pub value: Box<dyn Expression>,
 }
 
 impl Statement for LetStatement {
     fn node(&self) -> Box<dyn Node> {
-        todo!()
+        self.value.node()
     }
 
-    fn statement(&self) -> Box<dyn Statement> {
-        todo!()
-    }
+    fn statement(&self) {}
 }
 
 impl Node for LetStatement {
