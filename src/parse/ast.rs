@@ -1,14 +1,14 @@
-pub enum NodeType {
+pub enum Node {
     StatementNode(Statement),
     ExpressionNode(Expression),
 }
 
 pub enum Statement {
-    Let(String, Expression),
+    Let { name: String, value: Expression },
 }
 
 pub enum Expression {
-    Identifier(String),
+    Identifier { name: String },
 }
 
 pub struct Program {

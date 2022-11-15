@@ -7,13 +7,23 @@ use super::ast::{Expression, Program, Statement};
 
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
+    errors: Vec<String>,
 }
 
 impl<'a> Parser<'a> {
     fn new(lexer: Lexer<'a>) -> Self {
         Parser {
             lexer: lexer.peekable(),
+            errors: Vec::new(),
         }
+    }
+
+    fn peek_error(&mut self, token: Token) {
+        self.errors.push(format!(
+            "Expected next token to be {:?}, got {:?} instead",
+            token,
+            self.lexer.peek().unwrap()
+        ));
     }
 
     fn parse_program(&mut self) -> Program {
@@ -42,13 +52,14 @@ impl<'a> Parser<'a> {
             name = ident.to_string();
             self.lexer.next();
         } else {
+            self.peek_error(Token::Identifier(String::new()));
             return None;
         }
 
-        if let Some(&Token::Assignment) = self.lexer.peek() {
+        if let Some(Token::Assignment) = self.lexer.peek() {
             self.lexer.next();
         } else {
-            panic!("Expected equal sign, found: {:?}", self.lexer.next());
+            self.peek_error(Token::Assignment);
         }
 
         // TODO: Skip until the semicolon
@@ -60,15 +71,22 @@ impl<'a> Parser<'a> {
             };
         }
 
-        Some(Statement::Let(name.clone(), Expression::Identifier(name)))
+        Some(Statement::Let {
+            name: name.clone(),
+            value: Expression::Identifier { name },
+        })
     }
 
-    fn parse_identifier(&mut self) -> Expression {
+    fn parse_identifier(&mut self) -> Option<Expression> {
         match self.lexer.next() {
             Some(Token::Identifier(name)) => {
-                return Expression::Identifier(name);
+                return Some(Expression::Identifier { name });
             }
-            _ => panic!("Expected identifier not found"),
+            _ => {
+                self.errors
+                    .push(String::from("Expected identifier not found"));
+                return None;
+            }
         }
     }
 }
@@ -92,11 +110,12 @@ mod tests {
         let mut parser = Parser::new(lexer);
 
         let program = parser.parse_program();
+        assert_eq!(Vec::<String>::new(), parser.errors);
         assert_eq!(3, program.statements.len());
         for (i, statement) in program.statements.iter().enumerate() {
             let &expected_identifier = expected_identifiers.get(i).unwrap();
             match statement {
-                Statement::Let(name, expression) => {
+                Statement::Let { name, value } => {
                     assert_eq!(expected_identifier, name);
                     // TODO: Assert expression
                 }
