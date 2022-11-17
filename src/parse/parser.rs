@@ -1,21 +1,57 @@
-use std::iter::Peekable;
+use std::{collections::HashMap, iter::Peekable};
 
 use crate::token::lexer::Lexer;
 use crate::token::types::Token;
 
 use super::ast::{Expression, Program, Statement};
 
+type PrefixParse = fn(&mut Parser) -> Option<Expression>;
+type PostfixParse = fn(&mut Parser, Expression) -> Option<Expression>;
+
+enum Precendence {
+    Lowest,
+    Equals,      // ==
+    Lessgreater, // > or <
+    Sum,         // +
+    Product,     // *
+    Prefix,      // -X or !X
+    Call,        // my_function(X)
+}
+
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
+    current: Option<Token>,
     errors: Vec<String>,
+    prefix_functions: HashMap<Token, PrefixParse>,
+    postfix_functions: HashMap<Token, PostfixParse>,
 }
 
 impl<'a> Parser<'a> {
     fn new(lexer: Lexer<'a>) -> Self {
-        Parser {
+        let mut parser = Parser {
             lexer: lexer.peekable(),
+            current: None,
             errors: Vec::new(),
-        }
+            prefix_functions: HashMap::new(),
+            postfix_functions: HashMap::new(),
+        };
+        parser.register_prefix(Token::Identifier(String::from("foobar")), move |p| {
+            p.parse_identifier()
+        });
+        return parser;
+    }
+
+    fn next(&mut self) -> Option<Token> {
+        self.current = self.lexer.next();
+        return self.current.clone();
+    }
+
+    fn register_prefix(&mut self, token: Token, function: PrefixParse) {
+        self.prefix_functions.insert(token, function);
+    }
+
+    fn register_postfix(&mut self, token: Token, function: PostfixParse) {
+        self.postfix_functions.insert(token, function);
     }
 
     fn peek_error(&mut self, token: Token) {
@@ -29,7 +65,7 @@ impl<'a> Parser<'a> {
     fn parse_program(&mut self) -> Program {
         let mut statements: Vec<Statement> = Vec::new();
 
-        while let Some(current_token) = self.lexer.next() {
+        while let Some(current_token) = self.next() {
             if let Some(statement) = self.parse_statement(current_token) {
                 statements.push(statement);
             }
@@ -42,7 +78,7 @@ impl<'a> Parser<'a> {
         match current_token {
             Token::Let => self.parse_let_statement(),
             Token::Return => self.parse_return_statement(),
-            _ => None,
+            _ => self.parse_expression_statement(),
         }
     }
 
@@ -51,14 +87,14 @@ impl<'a> Parser<'a> {
 
         if let Some(Token::Identifier(ident)) = self.lexer.peek() {
             name = ident.to_string();
-            self.lexer.next();
+            self.next();
         } else {
             self.peek_error(Token::Identifier(String::new()));
             return None;
         }
 
         if let Some(Token::Assignment) = self.lexer.peek() {
-            self.lexer.next();
+            self.next();
         } else {
             self.peek_error(Token::Assignment);
         }
@@ -68,7 +104,7 @@ impl<'a> Parser<'a> {
             match self.lexer.peek() {
                 Some(Token::Semicolon) => break,
                 None => panic!("Missing semicolon"),
-                _ => self.lexer.next(),
+                _ => self.next(),
             };
         }
 
@@ -84,7 +120,7 @@ impl<'a> Parser<'a> {
             match self.lexer.peek() {
                 Some(Token::Semicolon) => break,
                 None => panic!("Missing semicolon"),
-                _ => self.lexer.next(),
+                _ => self.next(),
             };
         }
 
@@ -94,11 +130,54 @@ impl<'a> Parser<'a> {
             },
         })
     }
+
+    fn parse_expression_statement(&mut self) -> Option<Statement> {
+        let statement = self.parse_expression(Precendence::Lowest);
+
+        if statement.is_none() {
+            return None;
+        }
+
+        if let Some(Token::Semicolon) = self.lexer.peek() {
+            self.next();
+        }
+
+        Some(Statement::Expression {
+            value: statement.unwrap(),
+        })
+    }
+
+    fn parse_expression(&mut self, precedence: Precendence) -> Option<Expression> {
+        let next_token: &Token;
+
+        if let Some(token) = &self.current {
+            next_token = token;
+        } else {
+            return None;
+        }
+
+        if let Some(prefix) = self.prefix_functions.get(next_token) {
+            return prefix(self);
+        }
+        None
+    }
+
+    fn parse_identifier(&mut self) -> Option<Expression> {
+        if let Some(Token::Identifier(name)) = &self.current {
+            return Some(Expression::Identifier {
+                name: name.to_string(),
+            });
+        }
+        return None;
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse::ast::Statement, token::lexer::Lexer};
+    use crate::{
+        parse::ast::{Expression, Statement},
+        token::lexer::Lexer,
+    };
     use pretty_assertions::assert_eq;
 
     use super::Parser;
@@ -151,6 +230,26 @@ mod tests {
                 }
                 _ => panic!("Statement was not Return statement!"),
             }
+        }
+    }
+
+    #[test]
+    fn identifier_expression() {
+        let input = "foobar;";
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse_program();
+        assert_eq!(Vec::<String>::new(), parser.errors);
+        assert_eq!(1, program.statements.len());
+        let statement = program.statements.get(0).unwrap();
+        match statement {
+            Statement::Expression {
+                value: Expression::Identifier { name },
+            } => {
+                assert_eq!("foobar", name);
+            }
+            _ => panic!("Statement was not a standalone expression!"),
         }
     }
 }

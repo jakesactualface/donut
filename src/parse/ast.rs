@@ -6,8 +6,10 @@ pub enum Node {
 pub enum Statement {
     Let { name: String, value: Expression },
     Return { value: Expression },
+    Expression { value: Expression },
 }
 
+#[derive(Debug)]
 pub enum Expression {
     Identifier { name: String },
 }
