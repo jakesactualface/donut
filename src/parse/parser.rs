@@ -65,8 +65,8 @@ impl<'a> Parser<'a> {
     fn parse_program(&mut self) -> Program {
         let mut statements: Vec<Statement> = Vec::new();
 
-        while let Some(current_token) = self.next() {
-            if let Some(statement) = self.parse_statement(current_token) {
+        while let Some(_) = self.next() {
+            if let Some(statement) = self.parse_statement() {
                 statements.push(statement);
             }
         }
@@ -74,10 +74,10 @@ impl<'a> Parser<'a> {
         Program { statements }
     }
 
-    fn parse_statement(&mut self, current_token: Token) -> Option<Statement> {
-        match current_token {
-            Token::Let => self.parse_let_statement(),
-            Token::Return => self.parse_return_statement(),
+    fn parse_statement(&mut self) -> Option<Statement> {
+        match self.current {
+            Some(Token::Let) => self.parse_let_statement(),
+            Some(Token::Return) => self.parse_return_statement(),
             _ => self.parse_expression_statement(),
         }
     }
@@ -89,7 +89,7 @@ impl<'a> Parser<'a> {
             name = ident.to_string();
             self.next();
         } else {
-            self.peek_error(Token::Identifier(String::new()));
+            self.peek_error(Token::Identifier(String::default()));
             return None;
         }
 
@@ -126,7 +126,7 @@ impl<'a> Parser<'a> {
 
         Some(Statement::Return {
             value: Expression::Identifier {
-                name: String::new(),
+                name: String::default(),
             },
         })
     }
