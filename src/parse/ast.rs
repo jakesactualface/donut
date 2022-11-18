@@ -12,6 +12,7 @@ pub enum Statement {
 #[derive(Debug)]
 pub enum Expression {
     Identifier { name: String },
+    Integer { value: usize },
 }
 
 pub struct Program {

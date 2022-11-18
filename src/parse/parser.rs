@@ -1,4 +1,8 @@
-use std::{collections::HashMap, iter::Peekable};
+use std::{
+    collections::HashMap,
+    iter::Peekable,
+    mem::{discriminant, Discriminant},
+};
 
 use crate::token::lexer::Lexer;
 use crate::token::types::Token;
@@ -22,8 +26,8 @@ pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
     current: Option<Token>,
     errors: Vec<String>,
-    prefix_functions: HashMap<Token, PrefixParse>,
-    postfix_functions: HashMap<Token, PostfixParse>,
+    prefix_functions: HashMap<Discriminant<Token>, PrefixParse>,
+    postfix_functions: HashMap<Discriminant<Token>, PostfixParse>,
 }
 
 impl<'a> Parser<'a> {
@@ -35,8 +39,11 @@ impl<'a> Parser<'a> {
             prefix_functions: HashMap::new(),
             postfix_functions: HashMap::new(),
         };
-        parser.register_prefix(Token::Identifier(String::from("foobar")), move |p| {
+        parser.register_prefix(Token::Identifier(String::default()), move |p| {
             p.parse_identifier()
+        });
+        parser.register_prefix(Token::Integer(usize::default()), move |p| {
+            p.parse_integer_literal()
         });
         return parser;
     }
@@ -47,11 +54,12 @@ impl<'a> Parser<'a> {
     }
 
     fn register_prefix(&mut self, token: Token, function: PrefixParse) {
-        self.prefix_functions.insert(token, function);
+        self.prefix_functions.insert(discriminant(&token), function);
     }
 
     fn register_postfix(&mut self, token: Token, function: PostfixParse) {
-        self.postfix_functions.insert(token, function);
+        self.postfix_functions
+            .insert(discriminant(&token), function);
     }
 
     fn peek_error(&mut self, token: Token) {
@@ -156,7 +164,7 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        if let Some(prefix) = self.prefix_functions.get(next_token) {
+        if let Some(prefix) = self.prefix_functions.get(&discriminant(next_token)) {
             return prefix(self);
         }
         None
@@ -166,6 +174,15 @@ impl<'a> Parser<'a> {
         if let Some(Token::Identifier(name)) = &self.current {
             return Some(Expression::Identifier {
                 name: name.to_string(),
+            });
+        }
+        return None;
+    }
+
+    fn parse_integer_literal(&mut self) -> Option<Expression> {
+        if let Some(Token::Integer(value)) = &self.current {
+            return Some(Expression::Integer {
+                value: value.to_owned(),
             });
         }
         return None;
@@ -234,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn identifier_expression() {
+    fn single_identifier() {
         let input = "foobar;";
         let lexer = Lexer::new(input);
         let mut parser = Parser::new(lexer);
@@ -250,6 +267,26 @@ mod tests {
                 assert_eq!("foobar", name);
             }
             _ => panic!("Statement was not a standalone expression!"),
+        }
+    }
+
+    #[test]
+    fn single_integer_literal() {
+        let input = "5;";
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse_program();
+        assert_eq!(Vec::<String>::new(), parser.errors);
+        assert_eq!(1, program.statements.len());
+        let statement = program.statements.get(0).unwrap();
+        match statement {
+            Statement::Expression {
+                value: Expression::Integer { value },
+            } => {
+                assert_eq!(5, value.to_owned());
+            }
+            _ => panic!("Statement was not a standalone integer!"),
         }
     }
 }
