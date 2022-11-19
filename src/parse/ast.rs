@@ -1,3 +1,5 @@
+use crate::token::types::Token;
+
 pub enum Node {
     StatementNode(Statement),
     ExpressionNode(Expression),
@@ -11,8 +13,16 @@ pub enum Statement {
 
 #[derive(Debug)]
 pub enum Expression {
-    Identifier { name: String },
-    Integer { value: usize },
+    Identifier {
+        name: String,
+    },
+    Integer {
+        value: usize,
+    },
+    PrefixExpression {
+        operator: Token,
+        value: Box<Expression>,
+    },
 }
 
 pub struct Program {
