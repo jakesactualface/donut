@@ -23,6 +23,11 @@ pub enum Expression {
         operator: Token,
         value: Box<Expression>,
     },
+    InfixExpression {
+        left: Box<Expression>,
+        operator: Token,
+        right: Box<Expression>,
+    },
 }
 
 pub struct Program {

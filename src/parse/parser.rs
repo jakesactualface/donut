@@ -1,33 +1,26 @@
+// TODO: Remove this!
+#![allow(dead_code)]
+
 use std::{
     collections::HashMap,
     iter::Peekable,
     mem::{discriminant, Discriminant},
 };
 
-use crate::token::lexer::Lexer;
-use crate::token::types::Token;
+use crate::token::types::{get_precedence, Token};
+use crate::token::{lexer::Lexer, types::Precedence};
 
 use super::ast::{Expression, Program, Statement};
 
 type PrefixParse = fn(&mut Parser) -> Option<Expression>;
-type PostfixParse = fn(&mut Parser, Expression) -> Option<Expression>;
-
-enum Precendence {
-    Lowest,
-    Equals,      // ==
-    Lessgreater, // > or <
-    Sum,         // +
-    Product,     // *
-    Prefix,      // -X or !X
-    Call,        // my_function(X)
-}
+type InfixParse = fn(&mut Parser, Box<Expression>) -> Option<Expression>;
 
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
     current: Option<Token>,
     errors: Vec<String>,
     prefix_functions: HashMap<Discriminant<Token>, PrefixParse>,
-    postfix_functions: HashMap<Discriminant<Token>, PostfixParse>,
+    infix_functions: HashMap<Discriminant<Token>, InfixParse>,
 }
 
 impl<'a> Parser<'a> {
@@ -37,7 +30,7 @@ impl<'a> Parser<'a> {
             current: None,
             errors: Vec::new(),
             prefix_functions: HashMap::new(),
-            postfix_functions: HashMap::new(),
+            infix_functions: HashMap::new(),
         };
         parser.register_prefix(Token::Identifier(String::default()), move |p| {
             p.parse_identifier()
@@ -47,6 +40,14 @@ impl<'a> Parser<'a> {
         });
         parser.register_prefix(Token::Bang, move |p| p.parse_prefix_expression());
         parser.register_prefix(Token::Minus, move |p| p.parse_prefix_expression());
+        parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::NotEqual, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::LT, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::GT, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::Plus, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::Minus, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::Slash, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::Asterisk, move |p, e| p.parse_infix_expression(e));
         return parser;
     }
 
@@ -59,9 +60,8 @@ impl<'a> Parser<'a> {
         self.prefix_functions.insert(discriminant(&token), function);
     }
 
-    fn register_postfix(&mut self, token: Token, function: PostfixParse) {
-        self.postfix_functions
-            .insert(discriminant(&token), function);
+    fn register_infix(&mut self, token: Token, function: InfixParse) {
+        self.infix_functions.insert(discriminant(&token), function);
     }
 
     fn peek_error(&mut self, token: Token) {
@@ -142,7 +142,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression_statement(&mut self) -> Option<Statement> {
-        let statement = self.parse_expression(Precendence::Lowest);
+        let statement = self.parse_expression(Precedence::Lowest);
 
         if statement.is_none() {
             return None;
@@ -157,23 +157,46 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_expression(&mut self, precedence: Precendence) -> Option<Expression> {
-        let next_token: &Token;
+    fn parse_expression(&mut self, precedence: Precedence) -> Option<Expression> {
+        let current: &Token;
 
         if let Some(token) = &self.current {
-            next_token = token;
+            current = token;
         } else {
+            self.errors.push(String::from("No token in scope!"));
             return None;
         }
 
-        if let Some(prefix) = self.prefix_functions.get(&discriminant(next_token)) {
-            return prefix(self);
+        let mut expression: Option<Expression>;
+        if let Some(prefix) = self.prefix_functions.get(&discriminant(current)) {
+            expression = prefix(self);
+        } else {
+            self.errors.push(format!(
+                "No prefix parse function found for {:?}",
+                self.current
+            ));
+            return None;
         }
-        self.errors.push(format!(
-            "No prefix parse function found for {:?}",
-            self.current
-        ));
-        None
+
+        loop {
+            match self.lexer.peek() {
+                Some(Token::Semicolon) => break,
+                Some(token) => {
+                    if precedence >= token.precedence().clone() {
+                        break;
+                    }
+                    let infix = self.infix_functions.get(&discriminant(token));
+                    if infix.is_none() {
+                        return expression;
+                    }
+                    self.current = self.lexer.peek().cloned();
+                    self.lexer.next();
+                    expression = infix.unwrap()(self, Box::new(expression.unwrap()));
+                }
+                _ => break,
+            }
+        }
+        return expression;
     }
 
     fn parse_identifier(&mut self) -> Option<Expression> {
@@ -200,7 +223,6 @@ impl<'a> Parser<'a> {
         if let Some(token) = &self.current {
             operator = token.clone();
             self.next();
-            value = Box::new(self.parse_expression(Precendence::Prefix).unwrap());
         } else {
             self.errors.push(format!(
                 "No prefix expression found for token {:?}",
@@ -208,7 +230,38 @@ impl<'a> Parser<'a> {
             ));
             return None;
         }
+        if let Some(expression) = self.parse_expression(Precedence::Prefix) {
+            value = Box::new(expression);
+        } else {
+            self.errors.push(String::from("Missing expression!"));
+            return None;
+        }
         return Some(Expression::PrefixExpression { operator, value });
+    }
+
+    fn parse_infix_expression(&mut self, left: Box<Expression>) -> Option<Expression> {
+        let operator: Token;
+        if let Some(token) = &self.current {
+            operator = token.clone();
+            self.next();
+        } else {
+            self.errors.push(format!(
+                "No infix expression found for token {:?}",
+                &self.current
+            ));
+            return None;
+        }
+        let precedence = get_precedence(&self.current);
+        if let Some(right) = self.parse_expression(precedence.clone()) {
+            return Some(Expression::InfixExpression {
+                left,
+                operator,
+                right: Box::new(right),
+            });
+        } else {
+            self.errors.push(String::from("Missing expression!"));
+            return None;
+        }
     }
 }
 
@@ -239,7 +292,7 @@ mod tests {
         for (i, statement) in program.statements.iter().enumerate() {
             let &expected_identifier = expected_identifiers.get(i).unwrap();
             match statement {
-                Statement::Let { name, value } => {
+                Statement::Let { name, value: _ } => {
                     assert_eq!(expected_identifier, name);
                     // TODO: Assert value expression
                 }
@@ -265,7 +318,7 @@ mod tests {
         assert_eq!(3, program.statements.len());
         for statement in program.statements.iter() {
             match statement {
-                Statement::Return { value } => {
+                Statement::Return { value: _ } => {
                     // TODO: Assert value expression
                 }
                 _ => panic!("Statement was not Return statement!"),
@@ -313,6 +366,15 @@ mod tests {
         }
     }
 
+    fn assert_integer_expression(expression: &Expression, expected: usize) {
+        match expression {
+            Expression::Integer { value } => {
+                assert_eq!(expected, value.to_owned());
+            }
+            _ => panic!("Expression was not an integer!"),
+        }
+    }
+
     #[test]
     fn prefix_expressions() {
         let scenarios = vec![("!5;", Token::Bang, 5), ("-15;", Token::Minus, 15)];
@@ -330,14 +392,48 @@ mod tests {
                     value: Expression::PrefixExpression { operator, value },
                 } => {
                     // Complicated dereferencing required to traverse into box
-                    let inner_expression = &*value;
-                    match **inner_expression {
-                        Expression::Integer { value } => {
-                            assert_eq!(&scenario.1, operator);
-                            assert_eq!(scenario.2, value.to_owned());
-                        }
-                        _ => panic!("Inner statement was not an integer!"),
-                    }
+                    assert_integer_expression(&*value, scenario.2);
+                    assert_eq!(&scenario.1, operator);
+                }
+                _ => panic!("Statement was not a prefix expression!"),
+            }
+        }
+    }
+
+    #[test]
+    fn infix_expressions() {
+        let scenarios = vec![
+            ("5 + 5", 5, Token::Plus, 5),
+            ("5 - 5", 5, Token::Minus, 5),
+            ("5 * 5", 5, Token::Asterisk, 5),
+            ("5 / 5", 5, Token::Slash, 5),
+            ("5 > 5", 5, Token::GT, 5),
+            ("5 < 5", 5, Token::LT, 5),
+            ("5 == 5", 5, Token::Equal, 5),
+            ("5 != 5", 5, Token::NotEqual, 5),
+        ];
+
+        for scenario in scenarios.iter() {
+            let lexer = Lexer::new(scenario.0);
+            let mut parser = Parser::new(lexer);
+
+            let program = parser.parse_program();
+            assert_eq!(Vec::<String>::new(), parser.errors);
+            assert_eq!(1, program.statements.len());
+            let statement = program.statements.get(0).unwrap();
+            match statement {
+                Statement::Expression {
+                    value:
+                        Expression::InfixExpression {
+                            left,
+                            operator,
+                            right,
+                        },
+                } => {
+                    // Complicated dereferencing required to traverse into box
+                    assert_integer_expression(&*left, scenario.1);
+                    assert_eq!(&scenario.2, operator);
+                    assert_integer_expression(&*right, scenario.3);
                 }
                 _ => panic!("Statement was not a prefix expression!"),
             }

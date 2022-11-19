@@ -1,3 +1,6 @@
+use lazy_static::lazy_static;
+use std::collections::HashMap;
+
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Token {
     Identifier(String),
@@ -26,4 +29,44 @@ pub enum Token {
     Else,
     Return,
     Illegal,
+}
+
+#[derive(Clone, PartialEq, PartialOrd)]
+pub enum Precedence {
+    Lowest,
+    Equals,      // ==
+    LessGreater, // > or <
+    Sum,         // +
+    Product,     // *
+    Prefix,      // -X or !X
+    Call,        // my_function(X)
+}
+
+lazy_static! {
+    static ref PRECEDENCES: HashMap<Token, Precedence> = HashMap::from([
+        (Token::Equal, Precedence::Equals),
+        (Token::NotEqual, Precedence::Equals),
+        (Token::LT, Precedence::LessGreater),
+        (Token::GT, Precedence::LessGreater),
+        (Token::Plus, Precedence::Sum),
+        (Token::Minus, Precedence::Sum),
+        (Token::Slash, Precedence::Product),
+        (Token::Asterisk, Precedence::Product),
+    ]);
+}
+
+pub fn get_precedence<'a>(token_option: &'a Option<Token>) -> &Precedence {
+    if let Some(token) = &token_option {
+        return token.precedence();
+    }
+    &Precedence::Lowest
+}
+
+impl Token {
+    pub fn precedence(&self) -> &Precedence {
+        if let Some(precedence) = PRECEDENCES.get(&self) {
+            return precedence;
+        }
+        &Precedence::Lowest
+    }
 }
