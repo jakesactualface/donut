@@ -126,7 +126,7 @@ impl<'a> Parser<'a> {
         self.next();
         let value = self.parse_expression(Precedence::Lowest).unwrap();
 
-        if self.expect_peek(Token::Semicolon) {
+        if Some(&Token::Semicolon) == self.lexer.peek() {
             self.next();
         }
 
@@ -140,7 +140,7 @@ impl<'a> Parser<'a> {
         self.next();
         let value = self.parse_expression(Precedence::Lowest).unwrap();
 
-        if self.expect_peek(Token::Semicolon) {
+        if Some(&Token::Semicolon) == self.lexer.peek() {
             self.next();
         }
 
