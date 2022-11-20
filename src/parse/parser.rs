@@ -53,6 +53,7 @@ impl<'a> Parser<'a> {
         parser.register_infix(Token::Minus, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::Slash, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::Asterisk, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::LParen, move |p, e| p.parse_call_expression(e));
         return parser;
     }
 
@@ -392,6 +393,34 @@ impl<'a> Parser<'a> {
             return None;
         }
     }
+
+    fn parse_call_expression(&mut self, function: Box<Expression>) -> Option<Expression> {
+        Some(Expression::Call {
+            function,
+            arguments: self.parse_call_arguments(),
+        })
+    }
+
+    fn parse_call_arguments(&mut self) -> Vec<Expression> {
+        let mut arguments = vec![];
+        if let Some(Token::RParen) = self.next() {
+            return arguments;
+        }
+
+        arguments.push(self.parse_expression(Precedence::Lowest).unwrap());
+
+        while Some(&Token::Comma) == self.lexer.peek() {
+            self.next();
+            self.next();
+            arguments.push(self.parse_expression(Precedence::Lowest).unwrap());
+        }
+
+        if !self.expect_peek(Token::RParen) {
+            return vec![];
+        }
+
+        return arguments;
+    }
 }
 
 #[cfg(test)]
@@ -583,6 +612,13 @@ mod tests {
         }
     }
 
+    fn call(function: Expression, arguments: Vec<Expression>) -> Expression {
+        Expression::Call {
+            function: Box::new(function),
+            arguments,
+        }
+    }
+
     #[test]
     fn prefix_expressions() {
         let scenarios = vec![
@@ -717,6 +753,47 @@ mod tests {
                 "!(true == true)",
                 vec![prefix(Bang, infix(bool(true), Equal, bool(true)))],
             ),
+            (
+                "a + add(b * c) + d",
+                vec![infix(
+                    infix(
+                        ident("a"),
+                        Plus,
+                        call(ident("add"), vec![infix(ident("b"), Asterisk, ident("c"))]),
+                    ),
+                    Plus,
+                    ident("d"),
+                )],
+            ),
+            (
+                "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
+                vec![call(
+                    ident("add"),
+                    vec![
+                        ident("a"),
+                        ident("b"),
+                        int(1),
+                        infix(int(2), Asterisk, int(3)),
+                        infix(int(4), Plus, int(5)),
+                        call(ident("add"), vec![int(6), infix(int(7), Asterisk, int(8))]),
+                    ],
+                )],
+            ),
+            (
+                "add(a + b + c * d / f + g)",
+                vec![call(
+                    ident("add"),
+                    vec![infix(
+                        infix(
+                            infix(ident("a"), Plus, ident("b")),
+                            Plus,
+                            infix(infix(ident("c"), Asterisk, ident("d")), Slash, ident("f")),
+                        ),
+                        Plus,
+                        ident("g"),
+                    )],
+                )],
+            ),
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);
@@ -773,7 +850,7 @@ mod tests {
     fn function_literal() {
         let scenarios = vec![
             (
-                "fn(x, y) { x + y ; }",
+                "fn(x, y) { x + y };",
                 vec![fn_literal(
                     vec![ident("x"), ident("y")],
                     vec![Statement::Expression {
@@ -787,6 +864,29 @@ mod tests {
                 "fn(x, y, z) {};",
                 vec![fn_literal(vec![ident("x"), ident("y"), ident("z")], vec![])],
             ),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn call_expressions() {
+        let scenarios = vec![
+            (
+                "add(1, 2 * 3, 4 + 5);",
+                vec![call(
+                    ident("add"),
+                    vec![
+                        int(1),
+                        infix(int(2), Asterisk, int(3)),
+                        infix(int(4), Plus, int(5)),
+                    ],
+                )],
+            ),
+            ("add();", vec![call(ident("add"), vec![])]),
+            ("add(1);", vec![call(ident("add"), vec![int(1)])]),
+            ("add(a);", vec![call(ident("add"), vec![ident("a")])]),
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);

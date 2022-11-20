@@ -42,6 +42,10 @@ pub enum Expression {
         parameters: Vec<Expression>,
         body: Box<Program>,
     },
+    Call {
+        function: Box<Expression>,
+        arguments: Vec<Expression>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
