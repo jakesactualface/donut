@@ -60,6 +60,19 @@ impl<'a> Parser<'a> {
         return self.current.clone();
     }
 
+    fn expect_peek(&mut self, token: Token) -> bool {
+        match self.lexer.peek() {
+            Some(p) if *p == token => {
+                self.next();
+                return true;
+            }
+            _ => {
+                self.peek_error(token);
+                return false;
+            }
+        };
+    }
+
     fn register_prefix(&mut self, token: Token, function: PrefixParse) {
         self.prefix_functions.insert(discriminant(&token), function);
     }
@@ -107,10 +120,8 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        if let Some(Token::Assignment) = self.lexer.peek() {
-            self.next();
-        } else {
-            self.peek_error(Token::Assignment);
+        if !self.expect_peek(Token::Assignment) {
+            return None;
         }
 
         // TODO: Skip until the semicolon
@@ -232,12 +243,9 @@ impl<'a> Parser<'a> {
     fn parse_grouped_expression(&mut self) -> Option<Expression> {
         self.next();
         let expression = self.parse_expression(Precedence::Lowest);
-        match self.lexer.peek() {
-            Some(Token::RParen) => {
-                self.next();
-            }
-            _ => self.peek_error(Token::RParen),
-        };
+        if !self.expect_peek(Token::RParen) {
+            return None;
+        }
         return expression;
     }
 
@@ -264,50 +272,26 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if_expression(&mut self) -> Option<Expression> {
-        // TODO: Clean this up
-        match self.lexer.peek() {
-            Some(Token::LParen) => {
-                self.next();
-            }
-            _ => {
-                self.peek_error(Token::LParen);
-                return None;
-            }
-        };
+        if !self.expect_peek(Token::LParen) {
+            return None;
+        }
         self.next();
         let condition = self.parse_expression(Precedence::Lowest).unwrap();
-        match self.lexer.peek() {
-            Some(Token::RParen) => {
-                self.next();
-            }
-            _ => {
-                self.peek_error(Token::RParen);
-                return None;
-            }
-        };
-        match self.lexer.peek() {
-            Some(Token::LBrace) => {
-                self.next();
-            }
-            _ => {
-                self.peek_error(Token::LBrace);
-                return None;
-            }
-        };
+
+        if !self.expect_peek(Token::RParen) {
+            return None;
+        }
+        if !self.expect_peek(Token::LBrace) {
+            return None;
+        }
         let consequence = self.parse_block_statement().unwrap();
 
         let mut alternative = None;
         if let Some(Token::Else) = self.lexer.peek() {
             self.next();
-            match self.lexer.peek() {
-                Some(Token::LBrace) => {
-                    self.next();
-                }
-                _ => {
-                    self.peek_error(Token::LBrace);
-                    return None;
-                }
-            };
+            if !self.expect_peek(Token::LBrace) {
+                return None;
+            }
             alternative = Some(Box::new(self.parse_block_statement().unwrap()));
         }
 
