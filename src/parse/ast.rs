@@ -5,13 +5,14 @@ pub enum Node {
     ExpressionNode(Expression),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Statement {
     Let { name: String, value: Expression },
     Return { value: Expression },
     Expression { value: Expression },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expression {
     Identifier {
         name: String,

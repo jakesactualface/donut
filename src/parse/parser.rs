@@ -7,7 +7,7 @@ use std::{
     mem::{discriminant, Discriminant},
 };
 
-use crate::token::types::{get_precedence, Token};
+use crate::token::types::Token;
 use crate::token::{lexer::Lexer, types::Precedence};
 
 use super::ast::{Expression, Program, Statement};
@@ -251,8 +251,7 @@ impl<'a> Parser<'a> {
             ));
             return None;
         }
-        let precedence = get_precedence(&self.current);
-        if let Some(right) = self.parse_expression(precedence.clone()) {
+        if let Some(right) = self.parse_expression(operator.precedence().clone()) {
             return Some(Expression::InfixExpression {
                 left,
                 operator,
@@ -269,7 +268,10 @@ impl<'a> Parser<'a> {
 mod tests {
     use crate::{
         parse::ast::{Expression, Statement},
-        token::{lexer::Lexer, types::Token},
+        token::{
+            lexer::Lexer,
+            types::Token::{self, Asterisk, Bang, Equal, Minus, NotEqual, Plus, Slash, GT, LT},
+        },
     };
     use pretty_assertions::assert_eq;
 
@@ -377,7 +379,7 @@ mod tests {
 
     #[test]
     fn prefix_expressions() {
-        let scenarios = vec![("!5;", Token::Bang, 5), ("-15;", Token::Minus, 15)];
+        let scenarios = vec![("!5;", Bang, 5), ("-15;", Minus, 15)];
 
         for scenario in scenarios.iter() {
             let lexer = Lexer::new(scenario.0);
@@ -403,14 +405,14 @@ mod tests {
     #[test]
     fn infix_expressions() {
         let scenarios = vec![
-            ("5 + 5", 5, Token::Plus, 5),
-            ("5 - 5", 5, Token::Minus, 5),
-            ("5 * 5", 5, Token::Asterisk, 5),
-            ("5 / 5", 5, Token::Slash, 5),
-            ("5 > 5", 5, Token::GT, 5),
-            ("5 < 5", 5, Token::LT, 5),
-            ("5 == 5", 5, Token::Equal, 5),
-            ("5 != 5", 5, Token::NotEqual, 5),
+            ("5 + 5", 5, Plus, 5),
+            ("5 - 5", 5, Minus, 5),
+            ("5 * 5", 5, Asterisk, 5),
+            ("5 / 5", 5, Slash, 5),
+            ("5 > 5", 5, GT, 5),
+            ("5 < 5", 5, LT, 5),
+            ("5 == 5", 5, Equal, 5),
+            ("5 != 5", 5, NotEqual, 5),
         ];
 
         for scenario in scenarios.iter() {
@@ -437,6 +439,128 @@ mod tests {
                 }
                 _ => panic!("Statement was not a prefix expression!"),
             }
+        }
+    }
+
+    #[test]
+    fn infix_operator_precedence() {
+        let scenarios = vec![
+            (
+                "-a * b",
+                vec![infix(prefix(Minus, ident("a")), Asterisk, ident("b"))],
+            ),
+            ("!-a", vec![prefix(Bang, prefix(Minus, ident("a")))]),
+            (
+                "a + b + c",
+                vec![infix(infix(ident("a"), Plus, ident("b")), Plus, ident("c"))],
+            ),
+            (
+                "a + b - c",
+                vec![infix(
+                    infix(ident("a"), Plus, ident("b")),
+                    Minus,
+                    ident("c"),
+                )],
+            ),
+            (
+                "a * b * c",
+                vec![infix(
+                    infix(ident("a"), Asterisk, ident("b")),
+                    Asterisk,
+                    ident("c"),
+                )],
+            ),
+            (
+                "a * b / c",
+                vec![infix(
+                    infix(ident("a"), Asterisk, ident("b")),
+                    Slash,
+                    ident("c"),
+                )],
+            ),
+            (
+                "a + b * c + d / e - f",
+                vec![infix(
+                    infix(
+                        infix(ident("a"), Plus, infix(ident("b"), Asterisk, ident("c"))),
+                        Plus,
+                        infix(ident("d"), Slash, ident("e")),
+                    ),
+                    Minus,
+                    ident("f"),
+                )],
+            ),
+            (
+                "3 + 4; -5 * 5",
+                vec![
+                    infix(int(3), Plus, int(4)),
+                    infix(prefix(Minus, int(5)), Asterisk, int(5)),
+                ],
+            ),
+            (
+                "5 > 4 != 3 < 4",
+                vec![infix(
+                    infix(int(5), GT, int(4)),
+                    NotEqual,
+                    infix(int(3), LT, int(4)),
+                )],
+            ),
+            (
+                "3 + 4 * 5 == 3 * 1 + 4 * 5",
+                vec![infix(
+                    infix(int(3), Plus, infix(int(4), Asterisk, int(5))),
+                    Equal,
+                    infix(
+                        infix(int(3), Asterisk, int(1)),
+                        Plus,
+                        infix(int(4), Asterisk, int(5)),
+                    ),
+                )],
+            ),
+        ];
+
+        for (scenario, expected) in scenarios.iter() {
+            let lexer = Lexer::new(scenario);
+            let mut parser = Parser::new(lexer);
+
+            let program = parser.parse_program();
+            assert_eq!(Vec::<String>::new(), parser.errors);
+            assert_eq!(expected.len(), program.statements.len());
+            for (i, statement) in program.statements.iter().enumerate() {
+                let expected_statement = Statement::Expression {
+                    value: expected.get(i).unwrap().clone(),
+                };
+                assert_eq!(
+                    expected_statement, *statement,
+                    "Failure on scenario {}, expected: {:?}, actual: {:?}",
+                    scenario, expected_statement, *statement
+                );
+            }
+        }
+    }
+
+    fn ident(name: &str) -> Expression {
+        Expression::Identifier {
+            name: String::from(name),
+        }
+    }
+
+    fn int(value: usize) -> Expression {
+        Expression::Integer { value }
+    }
+
+    fn prefix(operator: Token, value: Expression) -> Expression {
+        Expression::PrefixExpression {
+            operator,
+            value: Box::new(value),
+        }
+    }
+
+    fn infix(left: Expression, operator: Token, right: Expression) -> Expression {
+        Expression::InfixExpression {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
         }
     }
 }

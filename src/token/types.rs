@@ -55,13 +55,6 @@ lazy_static! {
     ]);
 }
 
-pub fn get_precedence<'a>(token_option: &'a Option<Token>) -> &Precedence {
-    if let Some(token) = &token_option {
-        return token.precedence();
-    }
-    &Precedence::Lowest
-}
-
 impl Token {
     pub fn precedence(&self) -> &Precedence {
         if let Some(precedence) = PRECEDENCES.get(&self) {
