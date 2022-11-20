@@ -44,6 +44,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::Minus, move |p| p.parse_prefix_expression());
         parser.register_prefix(Token::LParen, move |p| p.parse_grouped_expression());
         parser.register_prefix(Token::If, move |p| p.parse_if_expression());
+        parser.register_prefix(Token::Function, move |p| p.parse_function_literal());
         parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::NotEqual, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::LT, move |p, e| p.parse_infix_expression(e));
@@ -240,6 +241,53 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_function_literal(&mut self) -> Option<Expression> {
+        if !self.expect_peek(Token::LParen) {
+            return None;
+        }
+        let parameters = self.parse_function_parameters();
+
+        if !self.expect_peek(Token::LBrace) {
+            return None;
+        }
+        return Some(Expression::Function {
+            parameters,
+            body: Box::new(self.parse_block_statement().unwrap()),
+        });
+    }
+
+    fn parse_function_parameters(&mut self) -> Vec<Expression> {
+        let mut parameters = vec![];
+        if let Some(Token::RParen) = self.next() {
+            return parameters;
+        }
+
+        let current_to_identifier = |c: &Option<Token>| match c {
+            Some(Token::Identifier(name)) => {
+                return Some(Expression::Identifier {
+                    name: name.to_owned(),
+                })
+            }
+            _ => {
+                return None;
+            }
+        };
+
+        parameters.push(current_to_identifier(&self.current).unwrap());
+
+        while Some(&Token::Comma) == self.lexer.peek() {
+            self.next();
+            self.next();
+            parameters.push(current_to_identifier(&self.current).unwrap());
+        }
+
+        if !self.expect_peek(Token::RParen) {
+            return vec![];
+        }
+
+        return parameters;
+    }
+
     fn parse_grouped_expression(&mut self) -> Option<Expression> {
         self.next();
         let expression = self.parse_expression(Precedence::Lowest);
@@ -302,7 +350,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn parse_block_statement(&mut self) -> Option<Statement> {
+    fn parse_block_statement(&mut self) -> Option<Program> {
         let mut statements: Vec<Statement> = vec![];
         loop {
             match self.next() {
@@ -318,7 +366,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Some(Statement::Block { statements })
+        Some(Program { statements })
     }
 
     fn parse_infix_expression(&mut self, left: Box<Expression>) -> Option<Expression> {
@@ -349,7 +397,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parse::ast::{Expression, Statement},
+        parse::ast::{Expression, Program, Statement},
         token::{
             lexer::Lexer,
             types::Token::{self, Asterisk, Bang, Equal, Minus, NotEqual, Plus, Slash, GT, LT},
@@ -514,17 +562,24 @@ mod tests {
                 .collect()
         };
         let alt = match alternatives {
-            Some(statement) => Some(Box::new(Statement::Block {
+            Some(statement) => Some(Box::new(Program {
                 statements: map_statements_to_expressions(statement),
             })),
             _ => None,
         };
         Expression::IfExpression {
             condition: Box::new(condition),
-            consequence: Box::new(Statement::Block {
+            consequence: Box::new(Program {
                 statements: map_statements_to_expressions(consequences),
             }),
             alternative: alt,
+        }
+    }
+
+    fn fn_literal(parameters: Vec<Expression>, body: Vec<Statement>) -> Expression {
+        Expression::Function {
+            parameters,
+            body: Box::new(Program { statements: body }),
         }
     }
 
@@ -707,6 +762,30 @@ mod tests {
                     vec![Statement::Expression { value: ident("x") }],
                     Some(vec![Statement::Expression { value: ident("y") }]),
                 )],
+            ),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn function_literal() {
+        let scenarios = vec![
+            (
+                "fn(x, y) { x + y ; }",
+                vec![fn_literal(
+                    vec![ident("x"), ident("y")],
+                    vec![Statement::Expression {
+                        value: infix(ident("x"), Plus, ident("y")),
+                    }],
+                )],
+            ),
+            ("fn() {};", vec![fn_literal(vec![], vec![])]),
+            ("fn(x) {};", vec![fn_literal(vec![ident("x")], vec![])]),
+            (
+                "fn(x, y, z) {};",
+                vec![fn_literal(vec![ident("x"), ident("y"), ident("z")], vec![])],
             ),
         ];
         for (scenario, expected) in scenarios.iter() {

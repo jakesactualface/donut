@@ -35,11 +35,16 @@ pub enum Expression {
     },
     IfExpression {
         condition: Box<Expression>,
-        consequence: Box<Statement>,
-        alternative: Option<Box<Statement>>,
+        consequence: Box<Program>,
+        alternative: Option<Box<Program>>,
+    },
+    Function {
+        parameters: Vec<Expression>,
+        body: Box<Program>,
     },
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Program {
     pub statements: Vec<Statement>,
 }
