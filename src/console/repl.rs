@@ -1,4 +1,7 @@
-use crate::token::{lexer::Lexer, types::Token};
+use crate::{
+    parse::{ast::Program, parser::Parser},
+    token::lexer::Lexer,
+};
 
 pub struct Repl {}
 
@@ -7,8 +10,14 @@ impl Repl {
         Repl {}
     }
 
-    pub fn run(&self, line: &str) -> Vec<Token> {
-        let lexer = Lexer::new(line);
-        lexer.collect()
+    pub fn run(&self, line: &str) -> Program {
+        let mut parser = Parser::new(Lexer::new(line));
+
+        let program = parser.parse_program();
+
+        if !parser.errors.is_empty() {
+            panic!("Errors encountered: {:#?}", parser.errors);
+        }
+        return program;
     }
 }

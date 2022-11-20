@@ -22,8 +22,9 @@ fn main() {
                 break;
             }
 
-            for token in repl.run(line) {
-                println!("{:?}", token);
+            let output = repl.run(line);
+            for statement in output.statements {
+                println!("{:#?}", statement);
             }
         }
     }

@@ -1,6 +1,3 @@
-// TODO: Remove this!
-#![allow(dead_code)]
-
 use std::{
     collections::HashMap,
     iter::Peekable,
@@ -18,13 +15,13 @@ type InfixParse = fn(&mut Parser, Box<Expression>) -> Option<Expression>;
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
     current: Option<Token>,
-    errors: Vec<String>,
+    pub errors: Vec<String>,
     prefix_functions: HashMap<Discriminant<Token>, PrefixParse>,
     infix_functions: HashMap<Discriminant<Token>, InfixParse>,
 }
 
 impl<'a> Parser<'a> {
-    fn new(lexer: Lexer<'a>) -> Self {
+    pub fn new(lexer: Lexer<'a>) -> Self {
         let mut parser = Parser {
             lexer: lexer.peekable(),
             current: None,
@@ -91,7 +88,7 @@ impl<'a> Parser<'a> {
         ));
     }
 
-    fn parse_program(&mut self) -> Program {
+    pub fn parse_program(&mut self) -> Program {
         let mut statements: Vec<Statement> = Vec::new();
 
         while let Some(_) = self.next() {
