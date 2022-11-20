@@ -43,6 +43,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::Bang, move |p| p.parse_prefix_expression());
         parser.register_prefix(Token::Minus, move |p| p.parse_prefix_expression());
         parser.register_prefix(Token::LParen, move |p| p.parse_grouped_expression());
+        parser.register_prefix(Token::If, move |p| p.parse_if_expression());
         parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::NotEqual, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::LT, move |p, e| p.parse_infix_expression(e));
@@ -262,6 +263,80 @@ impl<'a> Parser<'a> {
         return Some(Expression::PrefixExpression { operator, value });
     }
 
+    fn parse_if_expression(&mut self) -> Option<Expression> {
+        // TODO: Clean this up
+        match self.lexer.peek() {
+            Some(Token::LParen) => {
+                self.next();
+            }
+            _ => {
+                self.peek_error(Token::LParen);
+                return None;
+            }
+        };
+        self.next();
+        let condition = self.parse_expression(Precedence::Lowest).unwrap();
+        match self.lexer.peek() {
+            Some(Token::RParen) => {
+                self.next();
+            }
+            _ => {
+                self.peek_error(Token::RParen);
+                return None;
+            }
+        };
+        match self.lexer.peek() {
+            Some(Token::LBrace) => {
+                self.next();
+            }
+            _ => {
+                self.peek_error(Token::LBrace);
+                return None;
+            }
+        };
+        let consequence = self.parse_block_statement().unwrap();
+
+        let mut alternative = None;
+        if let Some(Token::Else) = self.lexer.peek() {
+            self.next();
+            match self.lexer.peek() {
+                Some(Token::LBrace) => {
+                    self.next();
+                }
+                _ => {
+                    self.peek_error(Token::LBrace);
+                    return None;
+                }
+            };
+            alternative = Some(Box::new(self.parse_block_statement().unwrap()));
+        }
+
+        return Some(Expression::IfExpression {
+            condition: Box::new(condition),
+            consequence: Box::new(consequence),
+            alternative,
+        });
+    }
+
+    fn parse_block_statement(&mut self) -> Option<Statement> {
+        let mut statements: Vec<Statement> = vec![];
+        loop {
+            match self.next() {
+                Some(Token::RBrace) => break,
+                Some(_) => {
+                    if let Some(statement) = self.parse_statement() {
+                        statements.push(statement);
+                    }
+                }
+                _ => {
+                    self.errors.push(String::from("Expected end of block!"));
+                    return None;
+                }
+            }
+        }
+        Some(Statement::Block { statements })
+    }
+
     fn parse_infix_expression(&mut self, left: Box<Expression>) -> Option<Expression> {
         let operator: Token;
         if let Some(token) = &self.current {
@@ -391,143 +466,109 @@ mod tests {
         }
     }
 
-    fn assert_integer_expression(expression: &Expression, expected: usize) {
-        match expression {
-            Expression::Integer { value } => {
-                assert_eq!(expected, value.to_owned());
-            }
-            _ => panic!("Expression was not an integer!"),
+    fn assert_expression_scenarios(scenario: &&str, expected_expressions: &Vec<Expression>) {
+        let lexer = Lexer::new(scenario);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse_program();
+        assert_eq!(Vec::<String>::new(), parser.errors);
+        assert_eq!(expected_expressions.len(), program.statements.len());
+        for (i, statement) in program.statements.iter().enumerate() {
+            let expected_statement = Statement::Expression {
+                value: expected_expressions.get(i).unwrap().clone(),
+            };
+            assert_eq!(
+                expected_statement, *statement,
+                "Failure on scenario {}, expected: {:?}, actual: {:?}",
+                scenario, expected_statement, *statement
+            );
         }
     }
 
-    fn assert_boolean_expression(expression: &Expression, expected: bool) {
-        match expression {
-            Expression::Boolean { value } => {
-                assert_eq!(expected, value.to_owned());
-            }
-            _ => panic!("Expression was not an boolean!"),
+    fn ident(name: &str) -> Expression {
+        Expression::Identifier {
+            name: String::from(name),
+        }
+    }
+
+    fn int(value: usize) -> Expression {
+        Expression::Integer { value }
+    }
+
+    fn bool(value: bool) -> Expression {
+        Expression::Boolean { value }
+    }
+
+    fn prefix(operator: Token, value: Expression) -> Expression {
+        Expression::PrefixExpression {
+            operator,
+            value: Box::new(value),
+        }
+    }
+
+    fn infix(left: Expression, operator: Token, right: Expression) -> Expression {
+        Expression::InfixExpression {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        }
+    }
+
+    fn conditional(
+        condition: Expression,
+        consequences: Vec<Statement>,
+        alternatives: Option<Vec<Statement>>,
+    ) -> Expression {
+        let map_statements_to_expressions = |s: Vec<Statement>| {
+            s.iter()
+                .map(|c| match c {
+                    Statement::Expression { value } => Statement::Expression {
+                        value: value.clone(),
+                    },
+                    _ => panic!("Expected expression but found {:?}", c),
+                })
+                .collect()
+        };
+        let alt = match alternatives {
+            Some(statement) => Some(Box::new(Statement::Block {
+                statements: map_statements_to_expressions(statement),
+            })),
+            _ => None,
+        };
+        Expression::IfExpression {
+            condition: Box::new(condition),
+            consequence: Box::new(Statement::Block {
+                statements: map_statements_to_expressions(consequences),
+            }),
+            alternative: alt,
         }
     }
 
     #[test]
     fn prefix_expressions() {
-        let scenarios = vec![("!5;", Bang, 5), ("-15;", Minus, 15)];
-
-        for scenario in scenarios.iter() {
-            let lexer = Lexer::new(scenario.0);
-            let mut parser = Parser::new(lexer);
-
-            let program = parser.parse_program();
-            assert_eq!(Vec::<String>::new(), parser.errors);
-            assert_eq!(1, program.statements.len());
-            let statement = program.statements.get(0).unwrap();
-            match statement {
-                Statement::Expression {
-                    value: Expression::PrefixExpression { operator, value },
-                } => {
-                    // Complicated dereferencing required to traverse into box
-                    assert_integer_expression(&*value, scenario.2);
-                    assert_eq!(&scenario.1, operator);
-                }
-                _ => panic!("Statement was not a prefix expression!"),
-            }
+        let scenarios = vec![
+            ("!5;", vec![prefix(Bang, int(5))]),
+            ("-15;", vec![prefix(Minus, int(15))]),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
         }
     }
 
     #[test]
     fn infix_expressions() {
         let scenarios = vec![
-            ("5 + 5", 5, Plus, 5),
-            ("5 - 5", 5, Minus, 5),
-            ("5 * 5", 5, Asterisk, 5),
-            ("5 / 5", 5, Slash, 5),
-            ("5 > 5", 5, GT, 5),
-            ("5 < 5", 5, LT, 5),
-            ("5 == 5", 5, Equal, 5),
-            ("5 != 5", 5, NotEqual, 5),
+            ("5 + 5", vec![infix(int(5), Plus, int(5))]),
+            ("5 - 5", vec![infix(int(5), Minus, int(5))]),
+            ("5 * 5", vec![infix(int(5), Asterisk, int(5))]),
+            ("5 / 5", vec![infix(int(5), Slash, int(5))]),
+            ("5 > 5", vec![infix(int(5), GT, int(5))]),
+            ("5 < 5", vec![infix(int(5), LT, int(5))]),
+            ("5 == 5", vec![infix(int(5), Equal, int(5))]),
+            ("5 != 5", vec![infix(int(5), NotEqual, int(5))]),
         ];
-
-        for scenario in scenarios.iter() {
-            let lexer = Lexer::new(scenario.0);
-            let mut parser = Parser::new(lexer);
-
-            let program = parser.parse_program();
-            assert_eq!(Vec::<String>::new(), parser.errors);
-            assert_eq!(1, program.statements.len());
-            let statement = program.statements.get(0).unwrap();
-            match statement {
-                Statement::Expression {
-                    value:
-                        Expression::InfixExpression {
-                            left,
-                            operator,
-                            right,
-                        },
-                } => {
-                    // Complicated dereferencing required to traverse into box
-                    assert_integer_expression(&*left, scenario.1);
-                    assert_eq!(&scenario.2, operator);
-                    assert_integer_expression(&*right, scenario.3);
-                }
-                _ => panic!("Statement was not a prefix expression!"),
-            }
-        }
-    }
-
-    #[test]
-    fn fixed_boolean_expressions() {
-        let prefix_scenarios = vec![("!true;", Bang, true), ("!false;", Bang, false)];
-
-        for scenario in prefix_scenarios.iter() {
-            let lexer = Lexer::new(scenario.0);
-            let mut parser = Parser::new(lexer);
-
-            let program = parser.parse_program();
-            assert_eq!(Vec::<String>::new(), parser.errors);
-            assert_eq!(1, program.statements.len());
-            let statement = program.statements.get(0).unwrap();
-            match statement {
-                Statement::Expression {
-                    value: Expression::PrefixExpression { operator, value },
-                } => {
-                    // Complicated dereferencing required to traverse into box
-                    assert_boolean_expression(&*value, scenario.2);
-                    assert_eq!(&scenario.1, operator);
-                }
-                _ => panic!("Statement was not a prefix expression!"),
-            }
-        }
-
-        let infix_scenarios = vec![
-            ("true == true", true, Equal, true),
-            ("true != false", true, NotEqual, false),
-            ("false == false", false, Equal, false),
-        ];
-
-        for scenario in infix_scenarios.iter() {
-            let lexer = Lexer::new(scenario.0);
-            let mut parser = Parser::new(lexer);
-
-            let program = parser.parse_program();
-            assert_eq!(Vec::<String>::new(), parser.errors);
-            assert_eq!(1, program.statements.len());
-            let statement = program.statements.get(0).unwrap();
-            match statement {
-                Statement::Expression {
-                    value:
-                        Expression::InfixExpression {
-                            left,
-                            operator,
-                            right,
-                        },
-                } => {
-                    // Complicated dereferencing required to traverse into box
-                    assert_boolean_expression(&*left, scenario.1);
-                    assert_eq!(&scenario.2, operator);
-                    assert_boolean_expression(&*right, scenario.3);
-                }
-                _ => panic!("Statement was not a prefix expression!"),
-            }
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
         }
     }
 
@@ -638,73 +679,54 @@ mod tests {
                 vec![prefix(Bang, infix(bool(true), Equal, bool(true)))],
             ),
         ];
-
         for (scenario, expected) in scenarios.iter() {
-            let lexer = Lexer::new(scenario);
-            let mut parser = Parser::new(lexer);
-
-            let program = parser.parse_program();
-            assert_eq!(Vec::<String>::new(), parser.errors);
-            assert_eq!(expected.len(), program.statements.len());
-            for (i, statement) in program.statements.iter().enumerate() {
-                let expected_statement = Statement::Expression {
-                    value: expected.get(i).unwrap().clone(),
-                };
-                assert_eq!(
-                    expected_statement, *statement,
-                    "Failure on scenario {}, expected: {:?}, actual: {:?}",
-                    scenario, expected_statement, *statement
-                );
-            }
-        }
-    }
-
-    fn ident(name: &str) -> Expression {
-        Expression::Identifier {
-            name: String::from(name),
-        }
-    }
-
-    fn int(value: usize) -> Expression {
-        Expression::Integer { value }
-    }
-
-    fn bool(value: bool) -> Expression {
-        Expression::Boolean { value }
-    }
-
-    fn prefix(operator: Token, value: Expression) -> Expression {
-        Expression::PrefixExpression {
-            operator,
-            value: Box::new(value),
-        }
-    }
-
-    fn infix(left: Expression, operator: Token, right: Expression) -> Expression {
-        Expression::InfixExpression {
-            left: Box::new(left),
-            operator,
-            right: Box::new(right),
+            assert_expression_scenarios(scenario, expected);
         }
     }
 
     #[test]
     fn boolean_expressions() {
-        let input = "true;";
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
+        let scenarios = vec![
+            ("true;", vec![bool(true)]),
+            ("!true;", vec![prefix(Bang, bool(true))]),
+            ("!false;", vec![prefix(Bang, bool(false))]),
+            ("true == true", vec![infix(bool(true), Equal, bool(true))]),
+            (
+                "true != false",
+                vec![infix(bool(true), NotEqual, bool(false))],
+            ),
+            (
+                "false == false",
+                vec![infix(bool(false), Equal, bool(false))],
+            ),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
 
-        let program = parser.parse_program();
-        assert_eq!(Vec::<String>::new(), parser.errors);
-        assert_eq!(1, program.statements.len());
-        let statement = program.statements.get(0).unwrap();
-        match statement {
-            Statement::Expression {
-                value: Expression::Boolean { value },
-            } => {
-                assert_eq!(true, value.to_owned());
-            }
-            _ => panic!("Statement was not a standalone expression!"),
+    #[test]
+    fn if_expressions() {
+        let scenarios = vec![
+            (
+                "if (x < y) { x }",
+                vec![conditional(
+                    infix(ident("x"), LT, ident("y")),
+                    vec![Statement::Expression { value: ident("x") }],
+                    None,
+                )],
+            ),
+            (
+                "if (x < y) { x } else { y }",
+                vec![conditional(
+                    infix(ident("x"), LT, ident("y")),
+                    vec![Statement::Expression { value: ident("x") }],
+                    Some(vec![Statement::Expression { value: ident("y") }]),
+                )],
+            ),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
         }
     }
 }
