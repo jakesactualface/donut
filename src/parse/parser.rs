@@ -38,6 +38,8 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::Integer(usize::default()), move |p| {
             p.parse_integer_literal()
         });
+        parser.register_prefix(Token::True, move |p| p.parse_boolean());
+        parser.register_prefix(Token::False, move |p| p.parse_boolean());
         parser.register_prefix(Token::Bang, move |p| p.parse_prefix_expression());
         parser.register_prefix(Token::Minus, move |p| p.parse_prefix_expression());
         parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
@@ -205,7 +207,7 @@ impl<'a> Parser<'a> {
                 name: name.to_string(),
             });
         }
-        return None;
+        None
     }
 
     fn parse_integer_literal(&mut self) -> Option<Expression> {
@@ -214,7 +216,15 @@ impl<'a> Parser<'a> {
                 value: value.to_owned(),
             });
         }
-        return None;
+        None
+    }
+
+    fn parse_boolean(&mut self) -> Option<Expression> {
+        match &self.current {
+            Some(Token::True) => Some(Expression::Boolean { value: true }),
+            Some(Token::False) => Some(Expression::Boolean { value: false }),
+            _ => None,
+        }
     }
 
     fn parse_prefix_expression(&mut self) -> Option<Expression> {
@@ -377,6 +387,15 @@ mod tests {
         }
     }
 
+    fn assert_boolean_expression(expression: &Expression, expected: bool) {
+        match expression {
+            Expression::Boolean { value } => {
+                assert_eq!(expected, value.to_owned());
+            }
+            _ => panic!("Expression was not an boolean!"),
+        }
+    }
+
     #[test]
     fn prefix_expressions() {
         let scenarios = vec![("!5;", Bang, 5), ("-15;", Minus, 15)];
@@ -443,7 +462,64 @@ mod tests {
     }
 
     #[test]
-    fn infix_operator_precedence() {
+    fn fixed_boolean_expressions() {
+        let prefix_scenarios = vec![("!true;", Bang, true), ("!false;", Bang, false)];
+
+        for scenario in prefix_scenarios.iter() {
+            let lexer = Lexer::new(scenario.0);
+            let mut parser = Parser::new(lexer);
+
+            let program = parser.parse_program();
+            assert_eq!(Vec::<String>::new(), parser.errors);
+            assert_eq!(1, program.statements.len());
+            let statement = program.statements.get(0).unwrap();
+            match statement {
+                Statement::Expression {
+                    value: Expression::PrefixExpression { operator, value },
+                } => {
+                    // Complicated dereferencing required to traverse into box
+                    assert_boolean_expression(&*value, scenario.2);
+                    assert_eq!(&scenario.1, operator);
+                }
+                _ => panic!("Statement was not a prefix expression!"),
+            }
+        }
+
+        let infix_scenarios = vec![
+            ("true == true", true, Equal, true),
+            ("true != false", true, NotEqual, false),
+            ("false == false", false, Equal, false),
+        ];
+
+        for scenario in infix_scenarios.iter() {
+            let lexer = Lexer::new(scenario.0);
+            let mut parser = Parser::new(lexer);
+
+            let program = parser.parse_program();
+            assert_eq!(Vec::<String>::new(), parser.errors);
+            assert_eq!(1, program.statements.len());
+            let statement = program.statements.get(0).unwrap();
+            match statement {
+                Statement::Expression {
+                    value:
+                        Expression::InfixExpression {
+                            left,
+                            operator,
+                            right,
+                        },
+                } => {
+                    // Complicated dereferencing required to traverse into box
+                    assert_boolean_expression(&*left, scenario.1);
+                    assert_eq!(&scenario.2, operator);
+                    assert_boolean_expression(&*right, scenario.3);
+                }
+                _ => panic!("Statement was not a prefix expression!"),
+            }
+        }
+    }
+
+    #[test]
+    fn operator_precedence() {
         let scenarios = vec![
             (
                 "-a * b",
@@ -517,6 +593,16 @@ mod tests {
                     ),
                 )],
             ),
+            ("true", vec![bool(true)]),
+            ("false", vec![bool(false)]),
+            (
+                "3 > 5 == false",
+                vec![infix(infix(int(3), GT, int(5)), Equal, bool(false))],
+            ),
+            (
+                "3 < 5 == true",
+                vec![infix(infix(int(3), LT, int(5)), Equal, bool(true))],
+            ),
         ];
 
         for (scenario, expected) in scenarios.iter() {
@@ -549,6 +635,10 @@ mod tests {
         Expression::Integer { value }
     }
 
+    fn bool(value: bool) -> Expression {
+        Expression::Boolean { value }
+    }
+
     fn prefix(operator: Token, value: Expression) -> Expression {
         Expression::PrefixExpression {
             operator,
@@ -561,6 +651,26 @@ mod tests {
             left: Box::new(left),
             operator,
             right: Box::new(right),
+        }
+    }
+
+    #[test]
+    fn boolean_expressions() {
+        let input = "true;";
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse_program();
+        assert_eq!(Vec::<String>::new(), parser.errors);
+        assert_eq!(1, program.statements.len());
+        let statement = program.statements.get(0).unwrap();
+        match statement {
+            Statement::Expression {
+                value: Expression::Boolean { value },
+            } => {
+                assert_eq!(true, value.to_owned());
+            }
+            _ => panic!("Statement was not a standalone expression!"),
         }
     }
 }

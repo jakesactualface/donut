@@ -20,6 +20,9 @@ pub enum Expression {
     Integer {
         value: usize,
     },
+    Boolean {
+        value: bool,
+    },
     PrefixExpression {
         operator: Token,
         value: Box<Expression>,
