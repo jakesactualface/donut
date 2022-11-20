@@ -42,6 +42,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::False, move |p| p.parse_boolean());
         parser.register_prefix(Token::Bang, move |p| p.parse_prefix_expression());
         parser.register_prefix(Token::Minus, move |p| p.parse_prefix_expression());
+        parser.register_prefix(Token::LParen, move |p| p.parse_grouped_expression());
         parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::NotEqual, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::LT, move |p, e| p.parse_infix_expression(e));
@@ -225,6 +226,18 @@ impl<'a> Parser<'a> {
             Some(Token::False) => Some(Expression::Boolean { value: false }),
             _ => None,
         }
+    }
+
+    fn parse_grouped_expression(&mut self) -> Option<Expression> {
+        self.next();
+        let expression = self.parse_expression(Precedence::Lowest);
+        match self.lexer.peek() {
+            Some(Token::RParen) => {
+                self.next();
+            }
+            _ => self.peek_error(Token::RParen),
+        };
+        return expression;
     }
 
     fn parse_prefix_expression(&mut self) -> Option<Expression> {
@@ -602,6 +615,27 @@ mod tests {
             (
                 "3 < 5 == true",
                 vec![infix(infix(int(3), LT, int(5)), Equal, bool(true))],
+            ),
+            (
+                "1 + (2 + 3) + 4",
+                vec![infix(
+                    infix(int(1), Plus, infix(int(2), Plus, int(3))),
+                    Plus,
+                    int(4),
+                )],
+            ),
+            (
+                "(5 + 5) * 2",
+                vec![infix(infix(int(5), Plus, int(5)), Asterisk, int(2))],
+            ),
+            (
+                "2 / (5 + 5)",
+                vec![infix(int(2), Slash, infix(int(5), Plus, int(5)))],
+            ),
+            ("-(5 + 5)", vec![prefix(Minus, infix(int(5), Plus, int(5)))]),
+            (
+                "!(true == true)",
+                vec![prefix(Bang, infix(bool(true), Equal, bool(true)))],
             ),
         ];
 
