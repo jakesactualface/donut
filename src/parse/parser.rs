@@ -126,36 +126,28 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        // TODO: Skip until the semicolon
-        loop {
-            match self.next() {
-                Some(Token::Semicolon) => break,
-                None => panic!("Missing semicolon"),
-                _ => (),
-            };
+        self.next();
+        let value = self.parse_expression(Precedence::Lowest).unwrap();
+
+        if self.expect_peek(Token::Semicolon) {
+            self.next();
         }
 
         Some(Statement::Let {
             name: name.clone(),
-            value: Expression::Identifier { name },
+            value,
         })
     }
 
     fn parse_return_statement(&mut self) -> Option<Statement> {
-        // TODO: Skip until the semicolon
-        loop {
-            match self.next() {
-                Some(Token::Semicolon) => break,
-                None => panic!("Missing semicolon"),
-                _ => (),
-            };
+        self.next();
+        let value = self.parse_expression(Precedence::Lowest).unwrap();
+
+        if self.expect_peek(Token::Semicolon) {
+            self.next();
         }
 
-        Some(Statement::Return {
-            value: Expression::Identifier {
-                name: String::default(),
-            },
-        })
+        Some(Statement::Return { value })
     }
 
     fn parse_expression_statement(&mut self) -> Option<Statement> {
@@ -438,52 +430,43 @@ mod tests {
 
     #[test]
     fn let_statements_only() {
-        let input = "
-            let x = 5;
-            let y = 10;
-            let foobar = 838383;
-        ";
-        let expected_identifiers = vec!["x", "y", "foobar"];
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-
-        let program = parser.parse_program();
-        assert_eq!(Vec::<String>::new(), parser.errors);
-        assert_eq!(3, program.statements.len());
-        for (i, statement) in program.statements.iter().enumerate() {
-            let &expected_identifier = expected_identifiers.get(i).unwrap();
-            match statement {
-                Statement::Let { name, value: _ } => {
-                    assert_eq!(expected_identifier, name);
-                    // TODO: Assert value expression
-                }
-                _ => {
-                    panic!("Statement was not LetStatement!");
-                }
-            }
+        let scenarios = vec![
+            (
+                "let x = y;",
+                Statement::Let {
+                    name: String::from("x"),
+                    value: ident("y"),
+                },
+            ),
+            (
+                "let y = 10;",
+                Statement::Let {
+                    name: String::from("y"),
+                    value: int(10),
+                },
+            ),
+            (
+                "let foobar = 838383;",
+                Statement::Let {
+                    name: String::from("foobar"),
+                    value: int(838383),
+                },
+            ),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_statement_scenarios(scenario, expected);
         }
     }
 
     #[test]
     fn return_statements_only() {
-        let input = "
-            return 5;
-            return 10;
-            return 993322;
-        ";
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-
-        let program = parser.parse_program();
-        assert_eq!(Vec::<String>::new(), parser.errors);
-        assert_eq!(3, program.statements.len());
-        for statement in program.statements.iter() {
-            match statement {
-                Statement::Return { value: _ } => {
-                    // TODO: Assert value expression
-                }
-                _ => panic!("Statement was not Return statement!"),
-            }
+        let scenarios = vec![
+            ("return 5;", Statement::Return { value: int(5) }),
+            ("return 10;", Statement::Return { value: int(10) }),
+            ("return 993322;", Statement::Return { value: int(993322) }),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_statement_scenarios(scenario, expected);
         }
     }
 
@@ -525,6 +508,21 @@ mod tests {
             }
             _ => panic!("Statement was not a standalone integer!"),
         }
+    }
+
+    fn assert_statement_scenarios(scenario: &&str, expected_statement: &Statement) {
+        let lexer = Lexer::new(scenario);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse_program();
+        assert_eq!(Vec::<String>::new(), parser.errors);
+        assert_eq!(1, program.statements.len());
+        let statement = program.statements.get(0).unwrap();
+        assert_eq!(
+            expected_statement, statement,
+            "Failure on scenario {}, expected: {:?}, actual: {:?}",
+            scenario, expected_statement, statement
+        );
     }
 
     fn assert_expression_scenarios(scenario: &&str, expected_expressions: &Vec<Expression>) {
