@@ -4,7 +4,7 @@ use std::collections::HashMap;
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Token {
     Identifier(String),
-    Integer(usize),
+    Integer(i64),
     Assignment,
     Plus,
     Minus,

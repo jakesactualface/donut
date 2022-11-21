@@ -32,7 +32,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::Identifier(String::default()), move |p| {
             p.parse_identifier()
         });
-        parser.register_prefix(Token::Integer(usize::default()), move |p| {
+        parser.register_prefix(Token::Integer(i64::default()), move |p| {
             p.parse_integer_literal()
         });
         parser.register_prefix(Token::True, move |p| p.parse_boolean());
@@ -547,7 +547,7 @@ mod tests {
         }
     }
 
-    fn int(value: usize) -> Expression {
+    fn int(value: i64) -> Expression {
         Expression::Integer { value }
     }
 

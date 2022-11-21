@@ -31,7 +31,7 @@ pub enum Expression {
         name: String,
     },
     Integer {
-        value: usize,
+        value: i64,
     },
     Boolean {
         value: bool,

@@ -79,7 +79,7 @@ impl<'a> Lexer<'a> {
                 if c.is_digit(10) {
                     // Capture remainder of number
                     let number_string = self.concat_until(&c, |x| !x.is_digit(10));
-                    match usize::from_str_radix(&number_string, 10) {
+                    match i64::from_str_radix(&number_string, 10) {
                         Ok(x) => return Token::Integer(x),
                         Err(e) => panic!("Error parsing integer: {}", e),
                     }
