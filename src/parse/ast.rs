@@ -1,8 +1,13 @@
 use crate::token::types::Token;
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Node {
-    StatementNode(Statement),
-    ExpressionNode(Expression),
+    Statement(Statement),
+    Expression(Expression),
+}
+
+pub trait ToNode {
+    fn to_node(self: Self) -> Node;
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -13,6 +18,13 @@ pub enum Statement {
     Block { statements: Vec<Statement> },
 }
 
+impl ToNode for Statement {
+    fn to_node(self) -> Node {
+        match self {
+            s => Node::Statement(s),
+        }
+    }
+}
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expression {
     Identifier {
@@ -48,7 +60,23 @@ pub enum Expression {
     },
 }
 
+impl ToNode for Expression {
+    fn to_node(self) -> Node {
+        match self {
+            s => Node::Expression(s),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Program {
     pub statements: Vec<Statement>,
+}
+
+impl ToNode for Program {
+    fn to_node(self: Self) -> Node {
+        Node::Statement(Statement::Block {
+            statements: self.statements,
+        })
+    }
 }

@@ -517,7 +517,7 @@ mod tests {
         let statement = program.statements.get(0).unwrap();
         assert_eq!(
             expected_statement, statement,
-            "Failure on scenario {}, expected: {:?}, actual: {:?}",
+            "Failure on scenario {}, expected: {:#?}, actual: {:#?}",
             scenario, expected_statement, statement
         );
     }
@@ -535,7 +535,7 @@ mod tests {
             };
             assert_eq!(
                 expected_statement, *statement,
-                "Failure on scenario {}, expected: {:?}, actual: {:?}",
+                "Failure on scenario {}, expected: {:#?}, actual: {:#?}",
                 scenario, expected_statement, *statement
             );
         }
