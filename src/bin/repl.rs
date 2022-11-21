@@ -2,6 +2,7 @@ use std::io::prelude::*;
 use std::io::BufWriter;
 
 use donut::console::repl::Repl;
+use donut::object::evaluator::eval;
 
 const PROMPT: &'static str = ">>";
 
@@ -23,9 +24,7 @@ fn main() {
             }
 
             let output = repl.run(line);
-            for statement in output.statements {
-                println!("{:#?}", statement);
-            }
+            println!("{:?}", eval(output));
         }
     }
 }
