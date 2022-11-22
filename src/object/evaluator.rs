@@ -46,7 +46,11 @@ fn eval_expression(expression: Expression) -> Object {
             left,
             operator,
             right,
-        } => todo!(),
+        } => {
+            let evaluated_left = eval(*left);
+            let evaluated_right = eval(*right);
+            return eval_infix_expression(operator, evaluated_left, evaluated_right);
+        }
         Expression::IfExpression {
             condition,
             consequence,
@@ -72,6 +76,7 @@ fn eval_prefix_expression(operator: Token, value: Object) -> Object {
         Token::Bang => match value {
             Boolean(true) => FALSE,
             Boolean(false) => TRUE,
+            Integer(0) => TRUE,
             Null => TRUE,
             _ => FALSE,
         },
@@ -80,6 +85,25 @@ fn eval_prefix_expression(operator: Token, value: Object) -> Object {
             _ => NULL,
         },
         _ => return NULL,
+    }
+}
+
+fn eval_infix_expression(operator: Token, left: Object, right: Object) -> Object {
+    match (operator, left, right) {
+        (operator, Integer(l), Integer(r)) => match operator {
+            Token::Plus => Integer(l + r),
+            Token::Minus => Integer(l - r),
+            Token::Asterisk => Integer(l * r),
+            Token::Slash => Integer(l / r),
+            Token::LT => native_bool_to_boolean(l < r),
+            Token::GT => native_bool_to_boolean(l > r),
+            Token::Equal => native_bool_to_boolean(l == r),
+            Token::NotEqual => native_bool_to_boolean(l != r),
+            _ => return Null,
+        },
+        (Token::Equal, l, r) => native_bool_to_boolean(l == r),
+        (Token::NotEqual, l, r) => native_bool_to_boolean(l != r),
+        _ => return Null,
     }
 }
 
@@ -112,36 +136,58 @@ mod tests {
     #[test]
     fn integer_expressions() {
         let scenarios = vec![
-            ("5", Integer(5)),
-            ("10", Integer(10)),
-            ("-5", Integer(-5)),
-            ("-10", Integer(-10)),
+            ("5", 5),
+            ("10", 10),
+            ("-5", -5),
+            ("-10", -10),
+            ("5 + 5 + 5 + 5 - 10", 10),
+            ("2 * 2 * 2 * 2 * 2", 32),
+            ("-50 + 100 + -50", 0),
+            ("5 * 2 + 10", 20),
+            ("5 + 2 * 10", 25),
+            ("20 + 2 * -10", 0),
+            ("50 / 2 * 2 + 10", 60),
+            ("2 * (5 + 10)", 30),
+            ("3 * 3 * 3 + 10", 37),
+            ("3 * (3 * 3) + 10", 37),
+            ("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50),
         ];
         for (scenario, expected) in scenarios.iter() {
-            assert_object_scenario(scenario, expected);
+            assert_object_scenario(scenario, &Integer(*expected));
         }
     }
 
     #[test]
     fn boolean_expressions() {
-        let scenarios = vec![("true", Boolean(true)), ("false", Boolean(false))];
-        for (scenario, expected) in scenarios.iter() {
-            assert_object_scenario(scenario, expected);
-        }
-    }
-
-    #[test]
-    fn bang_operator() {
         let scenarios = vec![
-            ("!true", Boolean(false)),
-            ("!false", Boolean(true)),
-            ("!5", Boolean(false)),
-            ("!!true", Boolean(true)),
-            ("!!false", Boolean(false)),
-            ("!!5", Boolean(true)),
+            ("true", true),
+            ("false", false),
+            ("!true", false),
+            ("!false", true),
+            ("!5", false),
+            ("!!true", true),
+            ("!!false", false),
+            ("!!5", true),
+            ("1 < 2", true),
+            ("1 > 2", false),
+            ("1 < 1", false),
+            ("1 > 1", false),
+            ("1 == 1", true),
+            ("1 != 1", false),
+            ("1 == 2", false),
+            ("1 != 2", true),
+            ("true == true", true),
+            ("false == false", true),
+            ("true == false", false),
+            ("true != false", true),
+            ("false != true", true),
+            ("(1 < 2) == true", true),
+            ("(1 < 2) == false", false),
+            ("(1 > 2) == true", false),
+            ("(1 > 2) == false", true),
         ];
         for (scenario, expected) in scenarios.iter() {
-            assert_object_scenario(scenario, expected);
+            assert_object_scenario(scenario, &Boolean(*expected));
         }
     }
 }
