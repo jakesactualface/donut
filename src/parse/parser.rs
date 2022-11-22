@@ -340,7 +340,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn parse_block_statement(&mut self) -> Option<Program> {
+    fn parse_block_statement(&mut self) -> Option<Statement> {
         let mut statements: Vec<Statement> = vec![];
         loop {
             match self.next() {
@@ -356,7 +356,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Some(Program { statements })
+        Some(Statement::Block { statements })
     }
 
     fn parse_infix_expression(&mut self, left: Box<Expression>) -> Option<Expression> {
@@ -415,7 +415,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parse::ast::{Expression, Program, Statement},
+        parse::ast::{Expression, Statement},
         token::{
             lexer::Lexer,
             types::Token::{self, Asterisk, Bang, Equal, Minus, NotEqual, Plus, Slash, GT, LT},
@@ -586,14 +586,14 @@ mod tests {
                 .collect()
         };
         let alt = match alternatives {
-            Some(statement) => Some(Box::new(Program {
+            Some(statement) => Some(Box::new(Statement::Block {
                 statements: map_statements_to_expressions(statement),
             })),
             _ => None,
         };
         Expression::IfExpression {
             condition: Box::new(condition),
-            consequence: Box::new(Program {
+            consequence: Box::new(Statement::Block {
                 statements: map_statements_to_expressions(consequences),
             }),
             alternative: alt,
@@ -603,7 +603,7 @@ mod tests {
     fn fn_literal(parameters: Vec<Expression>, body: Vec<Statement>) -> Expression {
         Expression::Function {
             parameters,
-            body: Box::new(Program { statements: body }),
+            body: Box::new(Statement::Block { statements: body }),
         }
     }
 

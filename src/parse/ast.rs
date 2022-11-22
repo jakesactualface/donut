@@ -4,6 +4,7 @@ use crate::token::types::Token;
 pub enum Node {
     Statement(Statement),
     Expression(Expression),
+    Program(Vec<Statement>),
 }
 
 pub trait ToNode {
@@ -47,12 +48,12 @@ pub enum Expression {
     },
     IfExpression {
         condition: Box<Expression>,
-        consequence: Box<Program>,
-        alternative: Option<Box<Program>>,
+        consequence: Box<Statement>,
+        alternative: Option<Box<Statement>>,
     },
     Function {
         parameters: Vec<Expression>,
-        body: Box<Program>,
+        body: Box<Statement>,
     },
     Call {
         function: Box<Expression>,
@@ -75,8 +76,6 @@ pub struct Program {
 
 impl ToNode for Program {
     fn to_node(self: Self) -> Node {
-        Node::Statement(Statement::Block {
-            statements: self.statements,
-        })
+        Node::Program(self.statements)
     }
 }

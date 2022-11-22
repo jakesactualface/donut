@@ -1,11 +1,11 @@
 // TODO: Remove this
 #![allow(unused_variables)]
 use crate::{
-    parse::ast::{Expression, Node, Program, Statement, ToNode},
+    parse::ast::{Expression, Node, Statement, ToNode},
     token::types::Token,
 };
 
-use super::types::Object::{self, Boolean, Integer, Null};
+use super::types::Object::{self, Boolean, Integer, Null, Return};
 
 const NULL: Object = Null;
 const TRUE: Object = Boolean(true);
@@ -13,6 +13,17 @@ const FALSE: Object = Boolean(false);
 
 pub fn eval(node: impl ToNode) -> Object {
     match node.to_node() {
+        Node::Program(statements) => {
+            let mut return_object = NULL;
+            for statement in statements.into_iter() {
+                return_object = eval(statement);
+                if let Return(object) = return_object {
+                    // Statement was a "return" statement, return unwrapped
+                    return *object;
+                }
+            }
+            return return_object;
+        }
         Node::Statement(s) => eval_statement(s),
         Node::Expression(e) => eval_expression(e),
     }
@@ -21,12 +32,17 @@ pub fn eval(node: impl ToNode) -> Object {
 fn eval_statement(statement: Statement) -> Object {
     match statement {
         Statement::Let { name, value } => todo!(),
-        Statement::Return { value } => todo!(),
+        Statement::Return { value } => Return(Box::new(eval(value))),
         Statement::Expression { value } => eval_expression(value),
         Statement::Block { statements } => {
             let mut return_object = NULL;
             for statement in statements.into_iter() {
                 return_object = eval_statement(statement);
+                if let Return(_) = return_object {
+                    // Statement was a "return" statement,
+                    // return wrapped value to be unwrapped higher
+                    return return_object;
+                }
             }
             return return_object;
         }
@@ -111,8 +127,8 @@ fn eval_infix_expression(operator: Token, left: Object, right: Object) -> Object
 
 fn eval_if_expression(
     condition: Expression,
-    consequence: Box<Program>,
-    alternative: Option<Box<Program>>,
+    consequence: Box<Statement>,
+    alternative: Option<Box<Statement>>,
 ) -> Object {
     let truthy = match eval(condition) {
         Integer(0) => false,
@@ -225,6 +241,30 @@ mod tests {
             ("if (1 > 2) { 10 }", Null),
             ("if (1 > 2) { 10 } else { 20 }", Integer(20)),
             ("if (1 < 2) { 10 } else { 20 }", Integer(10)),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn return_statements() {
+        let scenarios = vec![
+            ("return 10;", Integer(10)),
+            ("return 10; 9;", Integer(10)),
+            ("return 2 * 5; 9;", Integer(10)),
+            ("9; return 2 * 5; 9;", Integer(10)),
+            (
+                "
+                if (10 > 1) {
+                    if (10 > 1) {
+                        return 10;
+                    }
+                    return 1;
+                }
+                ",
+                Integer(10),
+            ),
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_object_scenario(scenario, expected);
