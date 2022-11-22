@@ -1,7 +1,7 @@
 // TODO: Remove this
 #![allow(unused_variables)]
 use crate::{
-    parse::ast::{Expression, Node, Statement, ToNode},
+    parse::ast::{Expression, Node, Program, Statement, ToNode},
     token::types::Token,
 };
 
@@ -24,7 +24,7 @@ fn eval_statement(statement: Statement) -> Object {
         Statement::Return { value } => todo!(),
         Statement::Expression { value } => eval_expression(value),
         Statement::Block { statements } => {
-            let mut return_object = Null;
+            let mut return_object = NULL;
             for statement in statements.into_iter() {
                 return_object = eval_statement(statement);
             }
@@ -55,7 +55,9 @@ fn eval_expression(expression: Expression) -> Object {
             condition,
             consequence,
             alternative,
-        } => todo!(),
+        } => {
+            return eval_if_expression(*condition, consequence, alternative);
+        }
         Expression::Function { parameters, body } => todo!(),
         Expression::Call {
             function,
@@ -74,10 +76,10 @@ fn native_bool_to_boolean(input: bool) -> Object {
 fn eval_prefix_expression(operator: Token, value: Object) -> Object {
     match operator {
         Token::Bang => match value {
-            Boolean(true) => FALSE,
-            Boolean(false) => TRUE,
+            TRUE => FALSE,
+            FALSE => TRUE,
             Integer(0) => TRUE,
-            Null => TRUE,
+            NULL => TRUE,
             _ => FALSE,
         },
         Token::Minus => match value {
@@ -99,12 +101,34 @@ fn eval_infix_expression(operator: Token, left: Object, right: Object) -> Object
             Token::GT => native_bool_to_boolean(l > r),
             Token::Equal => native_bool_to_boolean(l == r),
             Token::NotEqual => native_bool_to_boolean(l != r),
-            _ => return Null,
+            _ => return NULL,
         },
         (Token::Equal, l, r) => native_bool_to_boolean(l == r),
         (Token::NotEqual, l, r) => native_bool_to_boolean(l != r),
-        _ => return Null,
+        _ => return NULL,
     }
+}
+
+fn eval_if_expression(
+    condition: Expression,
+    consequence: Box<Program>,
+    alternative: Option<Box<Program>>,
+) -> Object {
+    let truthy = match eval(condition) {
+        Integer(0) => false,
+        Integer(1) => true,
+        TRUE => true,
+        FALSE => false,
+        NULL => false,
+        _ => true,
+    };
+
+    if truthy {
+        return eval(*consequence);
+    } else if alternative.is_some() {
+        return eval(*alternative.unwrap());
+    }
+    return NULL;
 }
 
 #[cfg(test)]
@@ -112,7 +136,7 @@ mod tests {
     use crate::{
         object::{
             evaluator::eval,
-            types::Object::{self, Boolean, Integer},
+            types::Object::{self, Boolean, Integer, Null},
         },
         parse::parser::Parser,
         token::lexer::Lexer,
@@ -188,6 +212,22 @@ mod tests {
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_object_scenario(scenario, &Boolean(*expected));
+        }
+    }
+
+    #[test]
+    fn if_else_expressions() {
+        let scenarios = vec![
+            ("if (true) { 10 }", Integer(10)),
+            ("if (false) { 10 }", Null),
+            ("if (1) { 10 }", Integer(10)),
+            ("if (1 < 2) { 10 }", Integer(10)),
+            ("if (1 > 2) { 10 }", Null),
+            ("if (1 > 2) { 10 } else { 20 }", Integer(20)),
+            ("if (1 < 2) { 10 } else { 20 }", Integer(10)),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_object_scenario(scenario, expected);
         }
     }
 }
