@@ -9,7 +9,7 @@ use crate::{
 
 use super::types::{
     Environment,
-    Object::{self, Boolean, Error, Integer, Null, Return},
+    Object::{self, Boolean, Error, Function, Integer, Null, Return},
 };
 
 const NULL: Object = Null;
@@ -113,7 +113,11 @@ fn eval_expression(expression: Expression, env: &mut Environment) -> Object {
         } => {
             return eval_if_expression(*condition, consequence, alternative, env);
         }
-        Expression::Function { parameters, body } => todo!(),
+        Expression::Function { parameters, body } => Function {
+            parameters,
+            body: *body,
+            env: Box::new(env.to_owned()),
+        },
         Expression::Call {
             function,
             arguments,
@@ -209,11 +213,17 @@ mod tests {
             evaluator::eval,
             types::{
                 Environment,
-                Object::{self, Boolean, Error, Integer, Null},
+                Object::{self, Boolean, Error, Function, Integer, Null},
             },
         },
-        parse::parser::Parser,
-        token::lexer::Lexer,
+        parse::{
+            ast::{
+                Expression::{self, Identifier, InfixExpression},
+                Statement,
+            },
+            parser::Parser,
+        },
+        token::{lexer::Lexer, types::Token},
     };
     use pretty_assertions::assert_eq;
 
@@ -380,5 +390,30 @@ mod tests {
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, Integer(expected));
         }
+    }
+
+    #[test]
+    fn function_objects() {
+        let scenario = (
+            "fn(x) { x + 2; };",
+            Function {
+                parameters: vec![Identifier {
+                    name: String::from("x"),
+                }],
+                body: Statement::Block {
+                    statements: vec![Statement::Expression {
+                        value: InfixExpression {
+                            left: Box::new(Identifier {
+                                name: String::from("x"),
+                            }),
+                            operator: Token::Plus,
+                            right: Box::new(Expression::Integer { value: 2 }),
+                        },
+                    }],
+                },
+                env: Box::new(Environment::new()),
+            },
+        );
+        assert_object_scenario(scenario.0, scenario.1);
     }
 }

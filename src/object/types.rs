@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::parse::ast::{Expression, Statement};
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Object {
     Integer(i64),
@@ -7,8 +9,14 @@ pub enum Object {
     Return(Box<Object>),
     Error(String),
     Null,
+    Function {
+        parameters: Vec<Expression>,
+        body: Statement,
+        env: Box<Environment>,
+    },
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Environment {
     store: HashMap<String, Object>,
 }
