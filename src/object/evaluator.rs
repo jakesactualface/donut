@@ -1,11 +1,13 @@
 // TODO: Remove this
 #![allow(unused_variables)]
+use std::mem::discriminant;
+
 use crate::{
     parse::ast::{Expression, Node, Statement, ToNode},
     token::types::Token,
 };
 
-use super::types::Object::{self, Boolean, Integer, Null, Return};
+use super::types::Object::{self, Boolean, Error, Integer, Null, Return};
 
 const NULL: Object = Null;
 const TRUE: Object = Boolean(true);
@@ -14,15 +16,22 @@ const FALSE: Object = Boolean(false);
 pub fn eval(node: impl ToNode) -> Object {
     match node.to_node() {
         Node::Program(statements) => {
-            let mut return_object = NULL;
+            let mut evaluated = NULL;
             for statement in statements.into_iter() {
-                return_object = eval(statement);
-                if let Return(object) = return_object {
+                evaluated = eval(statement);
+                match evaluated {
                     // Statement was a "return" statement, return unwrapped
-                    return *object;
-                }
+                    Return(object) => {
+                        return *object;
+                    }
+                    // Statement was an "error" statement, propagate
+                    Error(_) => {
+                        return evaluated;
+                    }
+                    _ => continue,
+                };
             }
-            return return_object;
+            return evaluated;
         }
         Node::Statement(s) => eval_statement(s),
         Node::Expression(e) => eval_expression(e),
@@ -32,19 +41,31 @@ pub fn eval(node: impl ToNode) -> Object {
 fn eval_statement(statement: Statement) -> Object {
     match statement {
         Statement::Let { name, value } => todo!(),
-        Statement::Return { value } => Return(Box::new(eval(value))),
+        Statement::Return { value } => {
+            let evaluated = eval(value);
+            return match evaluated {
+                Error(_) => evaluated,
+                _ => Return(Box::new(evaluated)),
+            };
+        }
         Statement::Expression { value } => eval_expression(value),
         Statement::Block { statements } => {
-            let mut return_object = NULL;
+            let mut evaluated = NULL;
             for statement in statements.into_iter() {
-                return_object = eval_statement(statement);
-                if let Return(_) = return_object {
-                    // Statement was a "return" statement,
-                    // return wrapped value to be unwrapped higher
-                    return return_object;
-                }
+                evaluated = eval_statement(statement);
+                match evaluated {
+                    // Statement was a "return" statement, propagate
+                    Return(_) => {
+                        return evaluated;
+                    }
+                    // Statement was an "error" statement, propagate
+                    Error(_) => {
+                        return evaluated;
+                    }
+                    _ => continue,
+                };
             }
-            return return_object;
+            return evaluated;
         }
     }
 }
@@ -56,17 +77,26 @@ fn eval_expression(expression: Expression) -> Object {
         Expression::Boolean { value } => native_bool_to_boolean(value),
         Expression::PrefixExpression { operator, value } => {
             let evaluated = eval(*value);
-            return eval_prefix_expression(operator, evaluated);
+            return match evaluated {
+                Error(_) => evaluated,
+                _ => eval_prefix_expression(operator, evaluated),
+            };
         }
         Expression::InfixExpression {
             left,
             operator,
             right,
-        } => {
-            let evaluated_left = eval(*left);
-            let evaluated_right = eval(*right);
-            return eval_infix_expression(operator, evaluated_left, evaluated_right);
-        }
+        } => match (eval(*left), eval(*right)) {
+            (Error(left), _) => {
+                return Error(left);
+            }
+            (_, Error(right)) => {
+                return Error(right);
+            }
+            (left, right) => {
+                return eval_infix_expression(operator, left, right);
+            }
+        },
         Expression::IfExpression {
             condition,
             consequence,
@@ -100,9 +130,9 @@ fn eval_prefix_expression(operator: Token, value: Object) -> Object {
         },
         Token::Minus => match value {
             Integer(i) => Integer(-i),
-            _ => NULL,
+            value => Error(format!("unknown operator: {:?}{:?}", operator, value)),
         },
-        _ => return NULL,
+        operator => return Error(format!("unknown operator: {:?}{:?}", operator, value)),
     }
 }
 
@@ -117,11 +147,14 @@ fn eval_infix_expression(operator: Token, left: Object, right: Object) -> Object
             Token::GT => native_bool_to_boolean(l > r),
             Token::Equal => native_bool_to_boolean(l == r),
             Token::NotEqual => native_bool_to_boolean(l != r),
-            _ => return NULL,
+            operator => Error(format!("unknown operator: {:?} {:?} {:?}", l, operator, r)),
         },
         (Token::Equal, l, r) => native_bool_to_boolean(l == r),
         (Token::NotEqual, l, r) => native_bool_to_boolean(l != r),
-        _ => return NULL,
+        (operator, l, r) if discriminant(&l) != discriminant(&r) => {
+            Error(format!("type mismatch: {:?} {:?} {:?}", l, operator, r))
+        }
+        (operator, l, r) => Error(format!("unknown operator: {:?} {:?} {:?}", l, operator, r)),
     }
 }
 
@@ -152,7 +185,7 @@ mod tests {
     use crate::{
         object::{
             evaluator::eval,
-            types::Object::{self, Boolean, Integer, Null},
+            types::Object::{self, Boolean, Error, Integer, Null},
         },
         parse::parser::Parser,
         token::lexer::Lexer,
@@ -264,6 +297,58 @@ mod tests {
                 }
                 ",
                 Integer(10),
+            ),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn error_handling() {
+        let scenarios = vec![
+            (
+                "5 + true;",
+                Error(String::from("type mismatch: Integer(5) Plus Boolean(true)")),
+            ),
+            (
+                "5 + true; 5;",
+                Error(String::from("type mismatch: Integer(5) Plus Boolean(true)")),
+            ),
+            (
+                "-true",
+                Error(String::from("unknown operator: MinusBoolean(true)")),
+            ),
+            (
+                "true + false;",
+                Error(String::from(
+                    "unknown operator: Boolean(true) Plus Boolean(false)",
+                )),
+            ),
+            (
+                "5; true + false; 5",
+                Error(String::from(
+                    "unknown operator: Boolean(true) Plus Boolean(false)",
+                )),
+            ),
+            (
+                "if ( 10 > 1) { true + false; }",
+                Error(String::from(
+                    "unknown operator: Boolean(true) Plus Boolean(false)",
+                )),
+            ),
+            (
+                "
+                    if (10 > 1) {
+                        if (10 > 1) {
+                            return true + false;
+                        }
+                        return 1;
+                    }
+                ",
+                Error(String::from(
+                    "unknown operator: Boolean(true) Plus Boolean(false)",
+                )),
             ),
         ];
         for (scenario, expected) in scenarios.iter() {
