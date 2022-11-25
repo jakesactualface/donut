@@ -1,6 +1,6 @@
 // TODO: Remove this
 #![allow(unused_variables)]
-use std::mem::discriminant;
+use std::{iter::zip, mem::discriminant};
 
 use crate::{
     parse::ast::{Expression, Node, Statement, ToNode},
@@ -121,7 +121,9 @@ fn eval_expression(expression: Expression, env: &mut Environment) -> Object {
         Expression::Call {
             function,
             arguments,
-        } => todo!(),
+        } => {
+            return eval_call_expression(function, arguments, env);
+        }
     }
 }
 
@@ -204,6 +206,48 @@ fn eval_if_expression(
         return eval(*alternative.unwrap(), env);
     }
     return NULL;
+}
+
+fn eval_call_expression(
+    function: Box<Expression>,
+    arguments: Vec<Expression>,
+    env: &mut Environment,
+) -> Object {
+    let evaluated = eval(*function, env);
+    if let Error(_) = evaluated {
+        return evaluated;
+    }
+    let mut evaluated_arguments: Vec<Object> = vec![];
+    for argument in arguments.into_iter() {
+        let evaluated_argument = eval(argument, env);
+        if let Error(_) = evaluated_argument {
+            // Error encountered in argument evaluation, propagate
+            return evaluated_argument;
+        }
+        evaluated_arguments.push(evaluated_argument);
+    }
+
+    if let Function {
+        parameters: inner_params,
+        body: inner_body,
+        env: inner_env,
+    } = evaluated
+    {
+        let mut extended_env = Environment::new_enclosure(*inner_env);
+        // Populate each parameter value in the new environment
+        for (arg, param) in zip(evaluated_arguments, inner_params) {
+            match param {
+                Expression::Identifier { name } => extended_env.set(name, arg),
+                _ => panic!("Expected identifier!"),
+            };
+        }
+        return match eval(inner_body, &mut extended_env) {
+            Return(value) => *value,
+            value => value,
+        };
+    } else {
+        return Error(format!("not a function: {evaluated:?}"));
+    }
 }
 
 #[cfg(test)]
@@ -319,10 +363,10 @@ mod tests {
     #[test]
     fn return_statements() {
         let scenarios = vec![
-            ("return 10;", Integer(10)),
-            ("return 10; 9;", Integer(10)),
-            ("return 2 * 5; 9;", Integer(10)),
-            ("9; return 2 * 5; 9;", Integer(10)),
+            ("return 10;", 10),
+            ("return 10; 9;", 10),
+            ("return 2 * 5; 9;", 10),
+            ("9; return 2 * 5; 9;", 10),
             (
                 "
                 if (10 > 1) {
@@ -332,11 +376,32 @@ mod tests {
                     return 1;
                 }
                 ",
-                Integer(10),
+                10,
+            ),
+            (
+                "
+                let f = fn(x) {
+                    return x;
+                    x + 10;
+                };
+                f(10);
+                ",
+                10,
+            ),
+            (
+                "
+                let f = fn(x) {
+                    let result = x + 10;
+                    return result;
+                    return 10;
+                };
+                f(10);
+                ",
+                20,
             ),
         ];
         for (scenario, expected) in scenarios.into_iter() {
-            assert_object_scenario(scenario, expected);
+            assert_object_scenario(scenario, Integer(expected));
         }
     }
 
@@ -415,5 +480,20 @@ mod tests {
             },
         );
         assert_object_scenario(scenario.0, scenario.1);
+    }
+
+    #[test]
+    fn function_application() {
+        let scenarios = vec![
+            ("let identity = fn(x) { x; }; identity(5);", 5),
+            ("let identity = fn(x) { return x; }; identity(5);", 5),
+            ("let double = fn(x) { x * 2; }; double(5);", 10),
+            ("let add = fn(x, y) { x + y; }; add(5, 5);", 10),
+            ("let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", 20),
+            ("fn(x) { x; }(5)", 5),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, Integer(expected));
+        }
     }
 }
