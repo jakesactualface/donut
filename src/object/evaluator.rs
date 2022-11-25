@@ -369,33 +369,33 @@ mod tests {
             ("9; return 2 * 5; 9;", 10),
             (
                 "
-                if (10 > 1) {
                     if (10 > 1) {
-                        return 10;
+                        if (10 > 1) {
+                            return 10;
+                        }
+                        return 1;
                     }
-                    return 1;
-                }
                 ",
                 10,
             ),
             (
                 "
-                let f = fn(x) {
-                    return x;
-                    x + 10;
-                };
-                f(10);
+                    let f = fn(x) {
+                        return x;
+                        x + 10;
+                    };
+                    f(10);
                 ",
                 10,
             ),
             (
                 "
-                let f = fn(x) {
-                    let result = x + 10;
-                    return result;
-                    return 10;
-                };
-                f(10);
+                    let f = fn(x) {
+                        let result = x + 10;
+                        return result;
+                        return 10;
+                    };
+                    f(10);
                 ",
                 20,
             ),
@@ -492,6 +492,23 @@ mod tests {
             ("let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", 20),
             ("fn(x) { x; }(5)", 5),
         ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, Integer(expected));
+        }
+    }
+
+    #[test]
+    fn closures() {
+        let scenarios = vec![(
+            "
+                let newAdder = fn(x) {
+                    fn(y) { x + y };
+                };
+                let addTwo = newAdder(2);
+                addTwo(2);
+            ",
+            4,
+        )];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, Integer(expected));
         }
