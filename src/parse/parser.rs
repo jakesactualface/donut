@@ -35,6 +35,9 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::Integer(i64::default()), move |p| {
             p.parse_integer_literal()
         });
+        parser.register_prefix(Token::String(String::default()), move |p| {
+            p.parse_string_literal()
+        });
         parser.register_prefix(Token::True, move |p| p.parse_boolean());
         parser.register_prefix(Token::False, move |p| p.parse_boolean());
         parser.register_prefix(Token::Bang, move |p| p.parse_prefix_expression());
@@ -217,6 +220,15 @@ impl<'a> Parser<'a> {
     fn parse_integer_literal(&mut self) -> Option<Expression> {
         if let Some(Token::Integer(value)) = &self.current {
             return Some(Expression::Integer {
+                value: value.to_owned(),
+            });
+        }
+        None
+    }
+
+    fn parse_string_literal(&mut self) -> Option<Expression> {
+        if let Some(Token::String(value)) = &self.current {
+            return Some(Expression::String {
                 value: value.to_owned(),
             });
         }
@@ -607,6 +619,12 @@ mod tests {
         }
     }
 
+    fn string_literal(value: &str) -> Expression {
+        Expression::String {
+            value: String::from(value),
+        }
+    }
+
     fn call(function: Expression, arguments: Vec<Expression>) -> Expression {
         Expression::Call {
             function: Box::new(function),
@@ -842,7 +860,7 @@ mod tests {
     }
 
     #[test]
-    fn function_literal() {
+    fn function_literals() {
         let scenarios = vec![
             (
                 "fn(x, y) { x + y };",
@@ -882,6 +900,17 @@ mod tests {
             ("add();", vec![call(ident("add"), vec![])]),
             ("add(1);", vec![call(ident("add"), vec![int(1)])]),
             ("add(a);", vec![call(ident("add"), vec![ident("a")])]),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn string_literals() {
+        let scenarios = vec![
+            ("\"hello world\"", vec![string_literal("hello world")]),
+            ("\"foo\\\"bar\"", vec![string_literal("foo\"bar")]),
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);

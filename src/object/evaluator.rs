@@ -81,6 +81,7 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
     match expression {
         Expression::Identifier { name } => eval_identifier(name, env),
         Expression::Integer { value } => Integer(value),
+        Expression::String { value } => Object::String(value),
         Expression::Boolean { value } => native_bool_to_boolean(value),
         Expression::PrefixExpression { operator, value } => {
             let evaluated = eval(*value, env.clone());
@@ -311,6 +312,17 @@ mod tests {
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, Integer(expected));
+        }
+    }
+
+    #[test]
+    fn string_expressions() {
+        let scenarios = vec![
+            ("\"Hello World!\"", "Hello World!"),
+            ("\"foo\\\"bar\"", "foo\"bar"),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, Object::String(String::from(expected)));
         }
     }
 

@@ -34,6 +34,9 @@ pub enum Expression {
     Integer {
         value: i64,
     },
+    String {
+        value: String,
+    },
     Boolean {
         value: bool,
     },

@@ -70,6 +70,7 @@ impl<'a> Lexer<'a> {
             '}' => Token::RBrace,
             ',' => Token::Comma,
             ';' => Token::Semicolon,
+            '"' => Token::String(self.read_string()),
             c => {
                 if c.is_alphabetic() {
                     // Capture remainder of alphanumeric word
@@ -87,6 +88,48 @@ impl<'a> Lexer<'a> {
                 Token::Illegal
             }
         }
+    }
+
+    fn read_string(&mut self) -> String {
+        let mut chars: Vec<char> = vec![];
+        let mut is_escaped_char = false;
+        loop {
+            match self.input.next() {
+                Some('\\') => {
+                    if is_escaped_char {
+                        chars.push('\\');
+                    }
+                    is_escaped_char = !is_escaped_char;
+                }
+                Some('t') => {
+                    if is_escaped_char {
+                        chars.push('\t');
+                        is_escaped_char = false;
+                    } else {
+                        chars.push('t');
+                    }
+                }
+                Some('n') => {
+                    if is_escaped_char {
+                        chars.push('\n');
+                        is_escaped_char = false;
+                    } else {
+                        chars.push('n');
+                    }
+                }
+                Some('"') => {
+                    if is_escaped_char {
+                        chars.push('"');
+                        is_escaped_char = false;
+                    } else {
+                        break;
+                    }
+                }
+                Some(c) => chars.push(c),
+                None => panic!("Expected string termination character!"),
+            }
+        }
+        return chars.into_iter().collect();
     }
 }
 
@@ -161,6 +204,11 @@ mod tests {
 
             10 == 10;
             10 != 9;
+            \"foobar\"
+            \"foo bar\"
+            \"foo\\\"bar\"
+            \"foo\\tbar\"
+            \"foo\\nbar\"
         ";
         let expected = vec![
             Token::Let,
@@ -236,6 +284,11 @@ mod tests {
             Token::NotEqual,
             Token::Integer(9),
             Token::Semicolon,
+            Token::String(String::from("foobar")),
+            Token::String(String::from("foo bar")),
+            Token::String(String::from("foo\"bar")),
+            Token::String(String::from("foo\tbar")),
+            Token::String(String::from("foo\nbar")),
         ];
         assert_tokens(expected, Lexer::new(input));
     }

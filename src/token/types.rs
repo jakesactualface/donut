@@ -5,6 +5,7 @@ use std::collections::HashMap;
 pub enum Token {
     Identifier(String),
     Integer(i64),
+    String(String),
     Assignment,
     Plus,
     Minus,

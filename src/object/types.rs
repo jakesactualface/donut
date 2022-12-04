@@ -6,6 +6,7 @@ use crate::parse::ast::{Expression, Statement};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Object {
     Integer(i64),
+    String(String),
     Boolean(bool),
     Return(Box<Object>),
     Error(String),
