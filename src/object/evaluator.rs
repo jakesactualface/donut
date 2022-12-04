@@ -9,7 +9,7 @@ use super::{
     builtins::{get_builtin, has_builtin},
     types::{
         Environment,
-        Object::{self, Boolean, Builtin, Error, Function, Integer, Null, Return},
+        Object::{self, Array, Boolean, Builtin, Error, Function, Integer, Null, Return},
     },
 };
 
@@ -115,6 +115,21 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
         } => {
             return eval_if_expression(*condition, consequence, alternative, env);
         }
+        Expression::Array { elements } => {
+            let mut evaluated_elements: Vec<Object> = vec![];
+            for element in elements.into_iter() {
+                let evaluated_element = eval(element, env.clone());
+                if let Error(_) = evaluated_element {
+                    // Error encountered in element evaluation, propagate
+                    return evaluated_element;
+                }
+                evaluated_elements.push(evaluated_element);
+            }
+            return Array(evaluated_elements);
+        }
+        Expression::Index { value, index } => {
+            return eval_index_expression(value, index, env);
+        }
         Expression::Function { parameters, body } => Function {
             parameters,
             body: *body,
@@ -126,6 +141,32 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
         } => {
             return eval_call_expression(function, arguments, env);
         }
+    }
+}
+
+fn eval_index_expression(
+    value: Box<Expression>,
+    index: Box<Expression>,
+    env: Rc<RefCell<Environment>>,
+) -> Object {
+    match (eval(*value, env.clone()), eval(*index, env)) {
+        (Error(array), _) => Error(array),
+        (_, Error(index)) => Error(index),
+        (Array(array), Integer(index)) => {
+            if let Some(object) = array.get(index as usize) {
+                return object.clone();
+            }
+            return Error(format!(
+                "index out of bounds! Arrays are zero-indexed. Given: {}, Length: {}",
+                index,
+                array.len()
+            ));
+        }
+        (array, Integer(_)) => Error(format!("index operator not implemented for: {:?}", array)),
+        (_, index) => Error(format!(
+            "expected integer for index value, received: {:?}",
+            index
+        )),
     }
 }
 
@@ -274,7 +315,7 @@ mod tests {
             evaluator::eval,
             types::{
                 Environment,
-                Object::{self, Boolean, Error, Function, Integer, Null},
+                Object::{self, Array, Boolean, Error, Function, Integer, Null},
             },
         },
         parse::{
@@ -560,6 +601,71 @@ mod tests {
                     counter(0);
                 ",
                 Boolean(true),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn array_expressions() {
+        let scenarios = vec![
+            (
+                "[1, 2* 2, 3 + 3]",
+                Array(vec![Integer(1), Integer(4), Integer(6)]),
+            ),
+            ("[]", Array(vec![])),
+            (
+                "[unknown]",
+                Error(String::from("identifier not found: unknown")),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn index_expressions() {
+        let scenarios = vec![
+            ("[1, 2, 3][0]", Integer(1)),
+            ("[1, 2, 3][1]", Integer(2)),
+            ("[1, 2, 3][2]", Integer(3)),
+            ("let i = 0; [1][i]", Integer(1)),
+            ("[1, 2, 3][1 + 1]", Integer(3)),
+            ("let myArray = [1, 2, 3]; myArray[2];", Integer(3)),
+            (
+                "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2]",
+                Integer(6),
+            ),
+            (
+                "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
+                Integer(2),
+            ),
+            (
+                "[1, 2, 3][3]",
+                Error(String::from(
+                    "index out of bounds! Arrays are zero-indexed. Given: 3, Length: 3",
+                )),
+            ),
+            (
+                "[1, 2, 3][-1]",
+                Error(String::from(
+                    "index out of bounds! Arrays are zero-indexed. Given: -1, Length: 3",
+                )),
+            ),
+            (
+                "[1, 2, 3][\"test\"]",
+                Error(String::from(
+                    "expected integer for index value, received: String(\"test\")",
+                )),
+            ),
+            (
+                "123[0]",
+                Error(String::from(
+                    "index operator not implemented for: Integer(123)",
+                )),
             ),
         ];
         for (scenario, expected) in scenarios.into_iter() {

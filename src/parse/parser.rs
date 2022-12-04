@@ -44,6 +44,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::Minus, move |p| p.parse_prefix_expression());
         parser.register_prefix(Token::LParen, move |p| p.parse_grouped_expression());
         parser.register_prefix(Token::If, move |p| p.parse_if_expression());
+        parser.register_prefix(Token::LBracket, move |p| p.parse_array_literal());
         parser.register_prefix(Token::Function, move |p| p.parse_function_literal());
         parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::NotEqual, move |p, e| p.parse_infix_expression(e));
@@ -54,6 +55,7 @@ impl<'a> Parser<'a> {
         parser.register_infix(Token::Slash, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::Asterisk, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::LParen, move |p, e| p.parse_call_expression(e));
+        parser.register_infix(Token::LBracket, move |p, e| p.parse_index_expression(e));
         return parser;
     }
 
@@ -243,6 +245,12 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_array_literal(&mut self) -> Option<Expression> {
+        Some(Expression::Array {
+            elements: self.parse_expression_list(Token::RBracket),
+        })
+    }
+
     fn parse_function_literal(&mut self) -> Option<Expression> {
         if !self.expect_peek(Token::LParen) {
             return None;
@@ -398,13 +406,13 @@ impl<'a> Parser<'a> {
     fn parse_call_expression(&mut self, function: Box<Expression>) -> Option<Expression> {
         Some(Expression::Call {
             function,
-            arguments: self.parse_call_arguments(),
+            arguments: self.parse_expression_list(Token::RParen),
         })
     }
 
-    fn parse_call_arguments(&mut self) -> Vec<Expression> {
+    fn parse_expression_list(&mut self, terminator: Token) -> Vec<Expression> {
         let mut arguments = vec![];
-        if let Some(Token::RParen) = self.next() {
+        if self.next() == Some(terminator.clone()) {
             return arguments;
         }
 
@@ -416,11 +424,31 @@ impl<'a> Parser<'a> {
             arguments.push(self.parse_expression(Precedence::Lowest).unwrap());
         }
 
-        if !self.expect_peek(Token::RParen) {
+        if !self.expect_peek(terminator) {
             return vec![];
         }
 
         return arguments;
+    }
+
+    fn parse_index_expression(&mut self, value: Box<Expression>) -> Option<Expression> {
+        self.next();
+
+        let index = self.parse_expression(Precedence::Lowest);
+        if index.is_none() {
+            self.errors.push(String::from("Missing index expression!"));
+            return None;
+        }
+
+        if !self.expect_peek(Token::RBracket) {
+            self.errors.push(String::from("Missing ending bracket!"));
+            return None;
+        }
+
+        return Some(Expression::Index {
+            value,
+            index: Box::new(index.unwrap()),
+        });
     }
 }
 
@@ -609,6 +637,17 @@ mod tests {
                 statements: map_statements_to_expressions(consequences),
             }),
             alternative: alt,
+        }
+    }
+
+    fn array(elements: Vec<Expression>) -> Expression {
+        Expression::Array { elements }
+    }
+
+    fn index(value: Expression, index: Expression) -> Expression {
+        Expression::Index {
+            value: Box::new(value),
+            index: Box::new(index),
         }
     }
 
@@ -807,6 +846,32 @@ mod tests {
                     )],
                 )],
             ),
+            (
+                "a * [1, 2, 3, 4][b * c] * d",
+                vec![infix(
+                    infix(
+                        ident("a"),
+                        Asterisk,
+                        index(
+                            array(vec![int(1), int(2), int(3), int(4)]),
+                            infix(ident("b"), Asterisk, ident("c")),
+                        ),
+                    ),
+                    Asterisk,
+                    ident("d"),
+                )],
+            ),
+            (
+                "add(a * b[2], b[1], 2 * [1, 2][1])",
+                vec![call(
+                    ident("add"),
+                    vec![
+                        infix(ident("a"), Asterisk, index(ident("b"), int(2))),
+                        index(ident("b"), int(1)),
+                        infix(int(2), Asterisk, index(array(vec![int(1), int(2)]), int(1))),
+                    ],
+                )],
+            ),
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);
@@ -912,6 +977,36 @@ mod tests {
             ("\"hello world\"", vec![string_literal("hello world")]),
             ("\"foo\\\"bar\"", vec![string_literal("foo\"bar")]),
         ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn array_literals() {
+        let scenarios = vec![
+            (
+                "[1, 2 * 2, 3 + 3]",
+                vec![array(vec![
+                    int(1),
+                    infix(int(2), Asterisk, int(2)),
+                    infix(int(3), Plus, int(3)),
+                ])],
+            ),
+            ("[]", vec![array(vec![])]),
+            ("[\"test\"]", vec![array(vec![string_literal("test")])]),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn index_expressions() {
+        let scenarios = vec![(
+            "myArray[1 + 1]",
+            vec![index(ident("myArray"), infix(int(1), Plus, int(1)))],
+        )];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);
         }

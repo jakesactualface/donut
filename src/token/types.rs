@@ -22,6 +22,8 @@ pub enum Token {
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
     Function,
     Let,
     True,
@@ -41,6 +43,7 @@ pub enum Precedence {
     Product,     // *
     Prefix,      // -X or !X
     Call,        // my_function(X)
+    Index,       // array[index]
 }
 
 lazy_static! {
@@ -54,6 +57,7 @@ lazy_static! {
         (Token::Slash, Precedence::Product),
         (Token::Asterisk, Precedence::Product),
         (Token::LParen, Precedence::Call),
+        (Token::LBracket, Precedence::Index),
     ]);
 }
 

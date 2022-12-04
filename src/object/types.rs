@@ -11,6 +11,7 @@ pub enum Object {
     Return(Box<Object>),
     Error(String),
     Null,
+    Array(Vec<Object>),
     Function {
         parameters: Vec<Expression>,
         body: Statement,

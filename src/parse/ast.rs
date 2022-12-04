@@ -54,6 +54,13 @@ pub enum Expression {
         consequence: Box<Statement>,
         alternative: Option<Box<Statement>>,
     },
+    Array {
+        elements: Vec<Expression>,
+    },
+    Index {
+        value: Box<Expression>,
+        index: Box<Expression>,
+    },
     Function {
         parameters: Vec<Expression>,
         body: Box<Statement>,

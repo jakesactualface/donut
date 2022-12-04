@@ -68,6 +68,8 @@ impl<'a> Lexer<'a> {
             ')' => Token::RParen,
             '{' => Token::LBrace,
             '}' => Token::RBrace,
+            '[' => Token::LBracket,
+            ']' => Token::RBracket,
             ',' => Token::Comma,
             ';' => Token::Semicolon,
             '"' => Token::String(self.read_string()),
@@ -209,6 +211,7 @@ mod tests {
             \"foo\\\"bar\"
             \"foo\\tbar\"
             \"foo\\nbar\"
+            [1, 2];
         ";
         let expected = vec![
             Token::Let,
@@ -289,6 +292,12 @@ mod tests {
             Token::String(String::from("foo\"bar")),
             Token::String(String::from("foo\tbar")),
             Token::String(String::from("foo\nbar")),
+            Token::LBracket,
+            Token::Integer(1),
+            Token::Comma,
+            Token::Integer(2),
+            Token::RBracket,
+            Token::Semicolon,
         ];
         assert_tokens(expected, Lexer::new(input));
     }
