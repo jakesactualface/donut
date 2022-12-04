@@ -179,6 +179,7 @@ fn eval_infix_expression(
             Token::NotEqual => native_bool_to_boolean(l != r),
             operator => Error(format!("unknown operator: {:?} {:?} {:?}", l, operator, r)),
         },
+        (Token::Plus, Object::String(l), Object::String(r)) => Object::String(l + &r),
         (Token::Equal, l, r) => native_bool_to_boolean(l == r),
         (Token::NotEqual, l, r) => native_bool_to_boolean(l != r),
         (operator, l, r) if discriminant(&l) != discriminant(&r) => {
@@ -320,6 +321,7 @@ mod tests {
         let scenarios = vec![
             ("\"Hello World!\"", "Hello World!"),
             ("\"foo\\\"bar\"", "foo\"bar"),
+            ("\"Hello\" + \" \" + \"World!\"", "Hello World!"),
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, Object::String(String::from(expected)));
@@ -354,6 +356,10 @@ mod tests {
             ("(1 < 2) == false", false),
             ("(1 > 2) == true", false),
             ("(1 > 2) == false", true),
+            ("\"Hello\" == \"Hello\"", true),
+            ("\"Hello\" != \"Hello\"", false),
+            ("\"Hello\" == \"World\"", false),
+            ("\"Hello\" != \"World\"", true),
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, Boolean(expected));
@@ -454,6 +460,10 @@ mod tests {
                 "unknown operator: Boolean(true) Plus Boolean(false)",
             ),
             ("foobar", "identifier not found: foobar"),
+            (
+                "\"Hello\" - \"World\"",
+                "unknown operator: String(\"Hello\") Minus String(\"World\")",
+            ),
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, Error(String::from(expected)));
