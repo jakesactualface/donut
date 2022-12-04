@@ -5,22 +5,11 @@ use crate::{
     token::types::Token,
 };
 
-use super::types::{
-    Environment,
-    Object::{self, Boolean, Builtin, Error, Function, Integer, Null, Return},
-};
-
-pub type BuiltinFunction = fn(&[Object]) -> Object;
-
-static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
-    "len" => |o| {
-        if o.len() != 1 {
-            return Error(format!("Wrong number of arguments for `len`. got:{}, want:1", o.len()));
-        }
-        return match &o[0] {
-            Object::String(value) => Integer(value.chars().count().try_into().unwrap()),
-            x => Error(format!("Argument to `len` not supported: {:?}", x)),
-        };
+use super::{
+    builtins::{get_builtin, has_builtin},
+    types::{
+        Environment,
+        Object::{self, Boolean, Builtin, Error, Function, Integer, Null, Return},
     },
 };
 
@@ -151,7 +140,7 @@ fn eval_identifier(name: String, env: Rc<RefCell<Environment>>) -> Object {
     if let Some(object) = env.borrow().get(&name) {
         return Rc::<Object>::try_unwrap(object).unwrap();
     }
-    if let Some(_) = BUILTINS.get(&name) {
+    if has_builtin(&name) {
         return Builtin(name);
     }
     return Error(format!("identifier not found: {name}"));
@@ -249,7 +238,7 @@ fn eval_call_expression(
     }
 
     if let Builtin(name) = evaluated {
-        let function = BUILTINS.get(&name).unwrap();
+        let function = get_builtin(&name);
         return function(evaluated_arguments.as_slice());
     }
 
