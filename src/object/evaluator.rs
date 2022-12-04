@@ -689,6 +689,50 @@ mod tests {
                     "Wrong number of arguments for `len`. got:2, want:1",
                 )),
             ),
+            (r#"len(["hello", "world"])"#, Integer(2)),
+            (r#"len([])"#, Integer(0)),
+            (r#"first("hello world")"#, Object::String(String::from("h"))),
+            (
+                r#"first(["hello", "world"])"#,
+                Object::String(String::from("hello")),
+            ),
+            (
+                r#"first([])"#,
+                Error(String::from(
+                    "Argument to `first` has no first element: Array([])",
+                )),
+            ),
+            (r#"last("hello world")"#, Object::String(String::from("d"))),
+            (
+                r#"last(["hello", "world"])"#,
+                Object::String(String::from("world")),
+            ),
+            (
+                r#"last([])"#,
+                Error(String::from(
+                    "Argument to `last` has no last element: Array([])",
+                )),
+            ),
+            (
+                r#"rest("hello world")"#,
+                Object::String(String::from("ello world")),
+            ),
+            (
+                r#"rest(["hello", "world"])"#,
+                Array(vec![Object::String(String::from("world"))]),
+            ),
+            (
+                r#"rest("")"#,
+                Error(String::from(
+                    "Argument to `rest` has no elements: String(\"\")",
+                )),
+            ),
+            (
+                r#"rest([])"#,
+                Error(String::from(
+                    "Argument to `rest` has no elements: Array([])",
+                )),
+            ),
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, expected);
