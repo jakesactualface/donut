@@ -1,5 +1,3 @@
-// TODO: Remove this
-#![allow(unused_variables)]
 use std::{cell::RefCell, iter::zip, mem::discriminant, rc::Rc};
 
 use crate::{
@@ -141,7 +139,11 @@ fn eval_identifier(name: String, env: Rc<RefCell<Environment>>) -> Object {
     return Error(format!("identifier not found: {name}"));
 }
 
-fn eval_prefix_expression(operator: Token, value: Object, env: Rc<RefCell<Environment>>) -> Object {
+fn eval_prefix_expression(
+    operator: Token,
+    value: Object,
+    _env: Rc<RefCell<Environment>>,
+) -> Object {
     match operator {
         Token::Bang => match value {
             TRUE => FALSE,
@@ -162,7 +164,7 @@ fn eval_infix_expression(
     operator: Token,
     left: Object,
     right: Object,
-    env: Rc<RefCell<Environment>>,
+    _env: Rc<RefCell<Environment>>,
 ) -> Object {
     match (operator, left, right) {
         (operator, Integer(l), Integer(r)) => match operator {
