@@ -120,3 +120,128 @@ fn rest_builtin(objects: &[Object]) -> Object {
         x => Error(format!("Argument to `rest` not supported: {:?}", x)),
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        object::{
+            evaluator::eval,
+            types::{
+                Environment,
+                Object::{self, Array, Error, Integer},
+            },
+        },
+        parse::parser::Parser,
+        token::lexer::Lexer,
+    };
+    use pretty_assertions::assert_eq;
+    use std::{cell::RefCell, rc::Rc};
+
+    fn assert_object_scenario(scenario: &str, expected: Object) {
+        let lexer = Lexer::new(scenario);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program();
+        let env = Rc::new(RefCell::new(Environment::new()));
+        assert_eq!(Vec::<String>::new(), parser.errors);
+
+        let evaluated = eval(program, env);
+        assert_eq!(
+            expected, evaluated,
+            "Failure on scenario {}, expected: {:#?}, actual: {:#?}",
+            scenario, expected, evaluated
+        );
+    }
+
+    #[test]
+    fn len() {
+        let scenarios = vec![
+            (r#"len("")"#, Integer(0)),
+            (r#"len("four")"#, Integer(4)),
+            (r#"len("hello world")"#, Integer(11)),
+            (
+                r#"len(1)"#,
+                Error(String::from("Argument to `len` not supported: Integer(1)")),
+            ),
+            (
+                r#"len("one", "two")"#,
+                Error(String::from(
+                    "Wrong number of arguments for `len`. got:2, want:1",
+                )),
+            ),
+            (r#"len(["hello", "world"])"#, Integer(2)),
+            (r#"len([])"#, Integer(0)),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn first() {
+        let scenarios = vec![
+            (r#"first("hello world")"#, Object::String(String::from("h"))),
+            (
+                r#"first(["hello", "world"])"#,
+                Object::String(String::from("hello")),
+            ),
+            (
+                r#"first([])"#,
+                Error(String::from(
+                    "Argument to `first` has no first element: Array([])",
+                )),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn last() {
+        let scenarios = vec![
+            (r#"last("hello world")"#, Object::String(String::from("d"))),
+            (
+                r#"last(["hello", "world"])"#,
+                Object::String(String::from("world")),
+            ),
+            (
+                r#"last([])"#,
+                Error(String::from(
+                    "Argument to `last` has no last element: Array([])",
+                )),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn rest() {
+        let scenarios = vec![
+            (
+                r#"rest("hello world")"#,
+                Object::String(String::from("ello world")),
+            ),
+            (
+                r#"rest(["hello", "world"])"#,
+                Array(vec![Object::String(String::from("world"))]),
+            ),
+            (
+                r#"rest("")"#,
+                Error(String::from(
+                    "Argument to `rest` has no elements: String(\"\")",
+                )),
+            ),
+            (
+                r#"rest([])"#,
+                Error(String::from(
+                    "Argument to `rest` has no elements: Array([])",
+                )),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+}
