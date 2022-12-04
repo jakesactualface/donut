@@ -114,7 +114,7 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
         Expression::Function { parameters, body } => Function {
             parameters,
             body: *body,
-            env,
+            env: env.clone(),
         },
         Expression::Call {
             function,
