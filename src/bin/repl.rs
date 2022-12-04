@@ -1,5 +1,7 @@
+use std::cell::RefCell;
 use std::io::prelude::*;
 use std::io::BufWriter;
+use std::rc::Rc;
 
 use donut::console::repl::Repl;
 use donut::object::evaluator::eval;
@@ -9,7 +11,7 @@ const PROMPT: &'static str = ">>";
 
 fn main() {
     let repl = Repl::new();
-    let mut env = Environment::new();
+    let env = Rc::new(RefCell::new(Environment::new()));
     let mut writer = BufWriter::new(std::io::stdout());
 
     println!("Welcome to the Donut REPL!");
@@ -26,7 +28,7 @@ fn main() {
             }
 
             let output = repl.run(line);
-            println!("{:?}", eval(output, &mut env));
+            println!("{:?}", eval(output, env.clone()));
         }
     }
 }

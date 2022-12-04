@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::parse::ast::{Expression, Statement};
 
@@ -12,16 +12,15 @@ pub enum Object {
     Function {
         parameters: Vec<Expression>,
         body: Statement,
-        env: Box<Environment>,
+        env: Rc<RefCell<Environment>>,
     },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Environment {
     store: HashMap<String, Object>,
-    outer: Option<Box<Environment>>,
+    outer: Option<Rc<RefCell<Environment>>>,
 }
-// TODO: Take a look at this: http://way-cooler.org/blog/2016/08/14/designing-a-bi-mutable-directional-tree-safely-in-rust.html
 
 impl Environment {
     pub fn new() -> Self {
@@ -31,19 +30,19 @@ impl Environment {
         }
     }
 
-    pub fn new_enclosure(outer: Environment) -> Self {
+    pub fn new_enclosure(outer: Rc<RefCell<Environment>>) -> Self {
         Environment {
             store: HashMap::new(),
-            outer: Some(Box::new(outer)),
+            outer: Some(outer),
         }
     }
 
-    pub fn get(&self, name: &str) -> Option<&Object> {
+    pub fn get(&self, name: &str) -> Option<Rc<Object>> {
         if let Some(object) = self.store.get(name) {
-            return Some(object);
+            return Some(Rc::new(object.clone()));
         }
         if let Some(outer) = &self.outer {
-            return outer.get(name);
+            return outer.borrow().get(name).clone();
         }
         return None;
     }

@@ -1,6 +1,6 @@
 // TODO: Remove this
 #![allow(unused_variables)]
-use std::{iter::zip, mem::discriminant};
+use std::{cell::RefCell, iter::zip, mem::discriminant, rc::Rc};
 
 use crate::{
     parse::ast::{Expression, Node, Statement, ToNode},
@@ -16,12 +16,12 @@ const NULL: Object = Null;
 const TRUE: Object = Boolean(true);
 const FALSE: Object = Boolean(false);
 
-pub fn eval(node: impl ToNode, env: &mut Environment) -> Object {
+pub fn eval(node: impl ToNode, env: Rc<RefCell<Environment>>) -> Object {
     match node.to_node() {
         Node::Program(statements) => {
             let mut evaluated = NULL;
             for statement in statements.into_iter() {
-                evaluated = eval(statement, env);
+                evaluated = eval(statement, env.clone());
                 match evaluated {
                     // Statement was a "return" statement, return unwrapped
                     Return(object) => {
@@ -41,13 +41,13 @@ pub fn eval(node: impl ToNode, env: &mut Environment) -> Object {
     }
 }
 
-fn eval_statement(statement: Statement, env: &mut Environment) -> Object {
+fn eval_statement(statement: Statement, env: Rc<RefCell<Environment>>) -> Object {
     match statement {
         Statement::Let { name, value } => {
-            let evaluated = eval(value, env);
+            let evaluated = eval(value, env.clone());
             return match evaluated {
                 Error(_) => evaluated,
-                _ => env.set(name, evaluated),
+                _ => env.borrow_mut().set(name, evaluated),
             };
         }
         Statement::Return { value } => {
@@ -61,7 +61,7 @@ fn eval_statement(statement: Statement, env: &mut Environment) -> Object {
         Statement::Block { statements } => {
             let mut evaluated = NULL;
             for statement in statements.into_iter() {
-                evaluated = eval_statement(statement, env);
+                evaluated = eval_statement(statement, env.clone());
                 match evaluated {
                     // Statement was a "return" statement, propagate
                     Return(_) => {
@@ -79,13 +79,13 @@ fn eval_statement(statement: Statement, env: &mut Environment) -> Object {
     }
 }
 
-fn eval_expression(expression: Expression, env: &mut Environment) -> Object {
+fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Object {
     match expression {
         Expression::Identifier { name } => eval_identifier(name, env),
         Expression::Integer { value } => Integer(value),
         Expression::Boolean { value } => native_bool_to_boolean(value),
         Expression::PrefixExpression { operator, value } => {
-            let evaluated = eval(*value, env);
+            let evaluated = eval(*value, env.clone());
             return match evaluated {
                 Error(_) => evaluated,
                 _ => eval_prefix_expression(operator, evaluated, env),
@@ -95,7 +95,7 @@ fn eval_expression(expression: Expression, env: &mut Environment) -> Object {
             left,
             operator,
             right,
-        } => match (eval(*left, env), eval(*right, env)) {
+        } => match (eval(*left, env.clone()), eval(*right, env.clone())) {
             (Error(left), _) => {
                 return Error(left);
             }
@@ -116,7 +116,7 @@ fn eval_expression(expression: Expression, env: &mut Environment) -> Object {
         Expression::Function { parameters, body } => Function {
             parameters,
             body: *body,
-            env: Box::new(env.to_owned()),
+            env,
         },
         Expression::Call {
             function,
@@ -134,14 +134,14 @@ fn native_bool_to_boolean(input: bool) -> Object {
     return FALSE;
 }
 
-fn eval_identifier(name: String, env: &mut Environment) -> Object {
-    if let Some(object) = env.get(&name) {
-        return object.to_owned();
+fn eval_identifier(name: String, env: Rc<RefCell<Environment>>) -> Object {
+    if let Some(object) = env.borrow().get(&name) {
+        return Rc::<Object>::try_unwrap(object).unwrap();
     }
     return Error(format!("identifier not found: {name}"));
 }
 
-fn eval_prefix_expression(operator: Token, value: Object, env: &mut Environment) -> Object {
+fn eval_prefix_expression(operator: Token, value: Object, env: Rc<RefCell<Environment>>) -> Object {
     match operator {
         Token::Bang => match value {
             TRUE => FALSE,
@@ -162,7 +162,7 @@ fn eval_infix_expression(
     operator: Token,
     left: Object,
     right: Object,
-    env: &mut Environment,
+    env: Rc<RefCell<Environment>>,
 ) -> Object {
     match (operator, left, right) {
         (operator, Integer(l), Integer(r)) => match operator {
@@ -189,9 +189,9 @@ fn eval_if_expression(
     condition: Expression,
     consequence: Box<Statement>,
     alternative: Option<Box<Statement>>,
-    env: &mut Environment,
+    env: Rc<RefCell<Environment>>,
 ) -> Object {
-    let truthy = match eval(condition, env) {
+    let truthy = match eval(condition, env.clone()) {
         Integer(0) => false,
         Integer(1) => true,
         TRUE => true,
@@ -211,15 +211,15 @@ fn eval_if_expression(
 fn eval_call_expression(
     function: Box<Expression>,
     arguments: Vec<Expression>,
-    env: &mut Environment,
+    env: Rc<RefCell<Environment>>,
 ) -> Object {
-    let evaluated = eval(*function, env);
+    let evaluated = eval(*function, env.clone());
     if let Error(_) = evaluated {
         return evaluated;
     }
     let mut evaluated_arguments: Vec<Object> = vec![];
     for argument in arguments.into_iter() {
-        let evaluated_argument = eval(argument, env);
+        let evaluated_argument = eval(argument, env.clone());
         if let Error(_) = evaluated_argument {
             // Error encountered in argument evaluation, propagate
             return evaluated_argument;
@@ -233,7 +233,7 @@ fn eval_call_expression(
         env: inner_env,
     } = evaluated
     {
-        let mut extended_env = Environment::new_enclosure(*inner_env);
+        let mut extended_env = Environment::new_enclosure(inner_env);
         // Populate each parameter value in the new environment
         for (arg, param) in zip(evaluated_arguments, inner_params) {
             match param {
@@ -241,7 +241,7 @@ fn eval_call_expression(
                 _ => panic!("Expected identifier!"),
             };
         }
-        return match eval(inner_body, &mut extended_env) {
+        return match eval(inner_body, Rc::new(RefCell::new(extended_env))) {
             Return(value) => *value,
             value => value,
         };
@@ -252,6 +252,8 @@ fn eval_call_expression(
 
 #[cfg(test)]
 mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
     use crate::{
         object::{
             evaluator::eval,
@@ -275,10 +277,10 @@ mod tests {
         let lexer = Lexer::new(scenario);
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
-        let mut env = Environment::new();
+        let env = Rc::new(RefCell::new(Environment::new()));
         assert_eq!(Vec::<String>::new(), parser.errors);
 
-        let evaluated = eval(program, &mut env);
+        let evaluated = eval(program, env);
         assert_eq!(
             expected, evaluated,
             "Failure on scenario {}, expected: {:#?}, actual: {:#?}",
@@ -476,7 +478,7 @@ mod tests {
                         },
                     }],
                 },
-                env: Box::new(Environment::new()),
+                env: Rc::new(RefCell::new(Environment::new())),
             },
         );
         assert_object_scenario(scenario.0, scenario.1);
