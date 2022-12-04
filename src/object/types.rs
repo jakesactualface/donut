@@ -16,6 +16,7 @@ pub enum Object {
         body: Statement,
         env: Rc<RefCell<Environment>>,
     },
+    Builtin(String),
 }
 
 #[derive(PartialEq, Eq, Clone)]

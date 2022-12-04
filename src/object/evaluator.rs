@@ -7,7 +7,21 @@ use crate::{
 
 use super::types::{
     Environment,
-    Object::{self, Boolean, Error, Function, Integer, Null, Return},
+    Object::{self, Boolean, Builtin, Error, Function, Integer, Null, Return},
+};
+
+pub type BuiltinFunction = fn(&[Object]) -> Object;
+
+static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
+    "len" => |o| {
+        if o.len() != 1 {
+            return Error(format!("Wrong number of arguments for `len`. got:{}, want:1", o.len()));
+        }
+        return match &o[0] {
+            Object::String(value) => Integer(value.chars().count().try_into().unwrap()),
+            x => Error(format!("Argument to `len` not supported: {:?}", x)),
+        };
+    },
 };
 
 const NULL: Object = Null;
@@ -137,6 +151,9 @@ fn eval_identifier(name: String, env: Rc<RefCell<Environment>>) -> Object {
     if let Some(object) = env.borrow().get(&name) {
         return Rc::<Object>::try_unwrap(object).unwrap();
     }
+    if let Some(_) = BUILTINS.get(&name) {
+        return Builtin(name);
+    }
     return Error(format!("identifier not found: {name}"));
 }
 
@@ -229,6 +246,11 @@ fn eval_call_expression(
             return evaluated_argument;
         }
         evaluated_arguments.push(evaluated_argument);
+    }
+
+    if let Builtin(name) = evaluated {
+        let function = BUILTINS.get(&name).unwrap();
+        return function(evaluated_arguments.as_slice());
     }
 
     if let Function {
@@ -549,6 +571,28 @@ mod tests {
                     counter(0);
                 ",
                 Boolean(true),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn builtin_functions() {
+        let scenarios = vec![
+            (r#"len("")"#, Integer(0)),
+            (r#"len("four")"#, Integer(4)),
+            (r#"len("hello world")"#, Integer(11)),
+            (
+                r#"len(1)"#,
+                Error(String::from("Argument to `len` not supported: Integer(1)")),
+            ),
+            (
+                r#"len("one", "two")"#,
+                Error(String::from(
+                    "Wrong number of arguments for `len`. got:2, want:1",
+                )),
             ),
         ];
         for (scenario, expected) in scenarios.into_iter() {
