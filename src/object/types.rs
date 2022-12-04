@@ -21,6 +21,7 @@ pub struct Environment {
     store: HashMap<String, Object>,
     outer: Option<Box<Environment>>,
 }
+// TODO: Take a look at this: http://way-cooler.org/blog/2016/08/14/designing-a-bi-mutable-directional-tree-safely-in-rust.html
 
 impl Environment {
     pub fn new() -> Self {

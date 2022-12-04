@@ -499,18 +499,34 @@ mod tests {
 
     #[test]
     fn closures() {
-        let scenarios = vec![(
-            "
-                let newAdder = fn(x) {
-                    fn(y) { x + y };
-                };
-                let addTwo = newAdder(2);
-                addTwo(2);
-            ",
-            4,
-        )];
+        let scenarios = vec![
+            (
+                "
+                    let newAdder = fn(x) {
+                        fn(y) { x + y };
+                    };
+                    let addTwo = newAdder(2);
+                    addTwo(2);
+                ",
+                Integer(4),
+            ),
+            (
+                "
+                    let counter = fn(x) {
+                        if (x > 100) {
+                            return true;
+                        } else {
+                            let foobar = 9999;
+                            counter(x + 1);
+                        }
+                    };
+                    counter(0);
+                ",
+                Boolean(true),
+            ),
+        ];
         for (scenario, expected) in scenarios.into_iter() {
-            assert_object_scenario(scenario, Integer(expected));
+            assert_object_scenario(scenario, expected);
         }
     }
 }
