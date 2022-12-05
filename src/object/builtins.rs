@@ -6,6 +6,7 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
     "first" => first_builtin,
     "last" => last_builtin,
     "len" => len_builtin,
+    "push" => push_builtin,
     "rest" => rest_builtin,
 };
 
@@ -88,6 +89,23 @@ fn len_builtin(objects: &[Object]) -> Object {
         Object::String(value) => Integer(value.chars().count().try_into().unwrap()),
         Object::Array(elements) => Integer(elements.len() as i64),
         x => Error(format!("Argument to `len` not supported: {:?}", x)),
+    };
+}
+
+fn push_builtin(objects: &[Object]) -> Object {
+    if objects.len() != 2 {
+        return Error(format!(
+            "Wrong number of arguments for `push`. got:{}, want:2",
+            objects.len()
+        ));
+    }
+    return match (&objects[0], &objects[1]) {
+        (Object::Array(elements), item) => {
+            let mut new_elements = elements.clone();
+            new_elements.push(item.clone());
+            return Object::Array(new_elements);
+        }
+        (array, _) => Error(format!("Argument to `push` not supported: {:?}", array)),
     };
 }
 
@@ -208,6 +226,38 @@ mod tests {
                 r#"last([])"#,
                 Error(String::from(
                     "Argument to `last` has no last element: Array([])",
+                )),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn push() {
+        let scenarios = vec![
+            (
+                r#"push(["hello"], "world")"#,
+                Object::Array(vec![
+                    Object::String(String::from("hello")),
+                    Object::String(String::from("world")),
+                ]),
+            ),
+            (
+                r#"push([], "hello")"#,
+                Object::Array(vec![Object::String(String::from("hello"))]),
+            ),
+            (
+                r#"push("hello", "world")"#,
+                Error(String::from(
+                    "Argument to `push` not supported: String(\"hello\")",
+                )),
+            ),
+            (
+                r#"push(["hello"], ["hello"], "world")"#,
+                Error(String::from(
+                    "Wrong number of arguments for `push`. got:3, want:2",
                 )),
             ),
         ];
