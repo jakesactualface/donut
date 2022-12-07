@@ -17,6 +17,7 @@ pub enum Token {
     LT,
     GT,
     Comma,
+    Colon,
     Semicolon,
     LParen,
     RParen,

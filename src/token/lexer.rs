@@ -70,6 +70,7 @@ impl<'a> Lexer<'a> {
             '}' => Token::RBrace,
             '[' => Token::LBracket,
             ']' => Token::RBracket,
+            ':' => Token::Colon,
             ',' => Token::Comma,
             ';' => Token::Semicolon,
             '"' => Token::String(self.read_string()),
@@ -212,6 +213,7 @@ mod tests {
             \"foo\\tbar\"
             \"foo\\nbar\"
             [1, 2];
+            {\"foo\": \"bar\"}
         ";
         let expected = vec![
             Token::Let,
@@ -298,6 +300,11 @@ mod tests {
             Token::Integer(2),
             Token::RBracket,
             Token::Semicolon,
+            Token::LBrace,
+            Token::String(String::from("foo")),
+            Token::Colon,
+            Token::String(String::from("bar")),
+            Token::RBrace,
         ];
         assert_tokens(expected, Lexer::new(input));
     }

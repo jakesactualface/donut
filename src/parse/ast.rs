@@ -57,6 +57,9 @@ pub enum Expression {
     Array {
         elements: Vec<Expression>,
     },
+    Hash {
+        pairs: Vec<(Expression, Expression)>,
+    },
     Index {
         value: Box<Expression>,
         index: Box<Expression>,

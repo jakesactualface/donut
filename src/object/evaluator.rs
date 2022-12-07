@@ -127,6 +127,7 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
             }
             return Array(evaluated_elements);
         }
+        Expression::Hash { pairs } => todo!(),
         Expression::Index { value, index } => {
             return eval_index_expression(value, index, env);
         }

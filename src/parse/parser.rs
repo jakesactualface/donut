@@ -45,6 +45,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::LParen, move |p| p.parse_grouped_expression());
         parser.register_prefix(Token::If, move |p| p.parse_if_expression());
         parser.register_prefix(Token::LBracket, move |p| p.parse_array_literal());
+        parser.register_prefix(Token::LBrace, move |p| p.parse_hash_literal());
         parser.register_prefix(Token::Function, move |p| p.parse_function_literal());
         parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::NotEqual, move |p, e| p.parse_infix_expression(e));
@@ -251,6 +252,33 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_hash_literal(&mut self) -> Option<Expression> {
+        let mut pairs: Vec<(Expression, Expression)> = vec![];
+
+        while Some(&Token::RBrace) != self.lexer.peek() {
+            self.next();
+            let key = self.parse_expression(Precedence::Lowest).unwrap();
+
+            if !self.expect_peek(Token::Colon) {
+                return None;
+            }
+
+            self.next();
+            let value = self.parse_expression(Precedence::Lowest).unwrap();
+            pairs.push((key, value));
+
+            if Some(&Token::RBrace) != self.lexer.peek() && !self.expect_peek(Token::Comma) {
+                return None;
+            }
+        }
+
+        if !self.expect_peek(Token::RBrace) {
+            return None;
+        }
+
+        Some(Expression::Hash { pairs })
+    }
+
     fn parse_function_literal(&mut self) -> Option<Expression> {
         if !self.expect_peek(Token::LParen) {
             return None;
@@ -454,6 +482,8 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::{
         parse::ast::{Expression, Statement},
         token::{
@@ -644,6 +674,10 @@ mod tests {
         Expression::Array { elements }
     }
 
+    fn hash(pairs: Vec<(Expression, Expression)>) -> Expression {
+        Expression::Hash { pairs }
+    }
+
     fn index(value: Expression, index: Expression) -> Expression {
         Expression::Index {
             value: Box::new(value),
@@ -658,7 +692,7 @@ mod tests {
         }
     }
 
-    fn string_literal(value: &str) -> Expression {
+    fn string(value: &str) -> Expression {
         Expression::String {
             value: String::from(value),
         }
@@ -974,8 +1008,8 @@ mod tests {
     #[test]
     fn string_literals() {
         let scenarios = vec![
-            ("\"hello world\"", vec![string_literal("hello world")]),
-            ("\"foo\\\"bar\"", vec![string_literal("foo\"bar")]),
+            ("\"hello world\"", vec![string("hello world")]),
+            ("\"foo\\\"bar\"", vec![string("foo\"bar")]),
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);
@@ -994,7 +1028,7 @@ mod tests {
                 ])],
             ),
             ("[]", vec![array(vec![])]),
-            ("[\"test\"]", vec![array(vec![string_literal("test")])]),
+            ("[\"test\"]", vec![array(vec![string("test")])]),
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);
@@ -1007,6 +1041,32 @@ mod tests {
             "myArray[1 + 1]",
             vec![index(ident("myArray"), infix(int(1), Plus, int(1)))],
         )];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn hash_literals() {
+        let scenarios = vec![
+            (
+                "{\"one\": 1, \"two\": 2, \"three\": 3}",
+                vec![hash(vec![
+                    (string("one"), int(1)),
+                    (string("two"), int(2)),
+                    (string("three"), int(3)),
+                ])],
+            ),
+            ("{}", vec![hash(vec![])]),
+            (
+                "{\"one\": 0 + 1, \"two\": 10 - 8, \"three\": 15 / 5}",
+                vec![hash(vec![
+                    (string("one"), infix(int(0), Plus, int(1))),
+                    (string("two"), infix(int(10), Minus, int(8))),
+                    (string("three"), infix(int(15), Slash, int(5))),
+                ])],
+            ),
+        ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);
         }
