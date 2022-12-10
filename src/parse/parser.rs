@@ -482,8 +482,6 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use crate::{
         parse::ast::{Expression, Statement},
         token::{

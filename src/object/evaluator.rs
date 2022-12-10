@@ -1,4 +1,4 @@
-use std::{cell::RefCell, iter::zip, mem::discriminant, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, iter::zip, mem::discriminant, rc::Rc};
 
 use crate::{
     parse::ast::{Expression, Node, Statement, ToNode},
@@ -9,7 +9,7 @@ use super::{
     builtins::{get_builtin, has_builtin},
     types::{
         Environment,
-        Object::{self, Array, Boolean, Builtin, Error, Function, Integer, Null, Return},
+        Object::{self, Array, Boolean, Builtin, Error, Function, Hash, Integer, Null, Return},
     },
 };
 
@@ -127,7 +127,7 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
             }
             return Array(evaluated_elements);
         }
-        Expression::Hash { pairs } => todo!(),
+        Expression::Hash { pairs } => eval_hash_expression(pairs, env),
         Expression::Index { value, index } => {
             return eval_index_expression(value, index, env);
         }
@@ -151,7 +151,7 @@ fn eval_index_expression(
     env: Rc<RefCell<Environment>>,
 ) -> Object {
     match (eval(*value, env.clone()), eval(*index, env)) {
-        (Error(array), _) => Error(array),
+        (Error(x), _) => Error(x),
         (_, Error(index)) => Error(index),
         (Array(array), Integer(index)) => {
             if let Some(object) = array.get(index as usize) {
@@ -163,7 +163,16 @@ fn eval_index_expression(
                 array.len()
             ));
         }
-        (array, Integer(_)) => Error(format!("index operator not implemented for: {:?}", array)),
+        (Hash(map), key) => {
+            if let Some(value) = map.get(&key) {
+                return value.clone();
+            }
+            return NULL;
+        }
+        (collection, Integer(_)) => Error(format!(
+            "index operator not implemented for: {:?}",
+            collection
+        )),
         (_, index) => Error(format!(
             "expected integer for index value, received: {:?}",
             index
@@ -307,16 +316,41 @@ fn eval_call_expression(
     }
 }
 
+fn eval_hash_expression(
+    pairs: Vec<(Expression, Expression)>,
+    env: Rc<RefCell<Environment>>,
+) -> Object {
+    let mut hash: HashMap<Object, Object> = HashMap::new();
+
+    for (key_expression, value_expression) in pairs.into_iter() {
+        let key = eval(key_expression, env.clone());
+        if let Error(_) = key {
+            // Error encountered in key evaluation, propagate
+            return key;
+        }
+
+        let value = eval(value_expression, env.clone());
+        if let Error(_) = value {
+            // Error encountered in value evaluation, propagate
+            return value;
+        }
+
+        hash.insert(key, value);
+    }
+
+    return Hash(hash);
+}
+
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, rc::Rc};
+    use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
     use crate::{
         object::{
             evaluator::eval,
             types::{
                 Environment,
-                Object::{self, Array, Boolean, Error, Function, Integer, Null},
+                Object::{self, Array, Boolean, Error, Function, Hash, Integer, Null},
             },
         },
         parse::{
@@ -628,6 +662,49 @@ mod tests {
     }
 
     #[test]
+    fn hash_expressions() {
+        let scenarios = vec![
+            (
+                "
+                let two = \"two\";
+                {
+                    \"one\": 10 - 9,
+                    two: 1 + 1,
+                    \"thr\" + \"ee\": 6 / 2,
+                    4: 4,
+                    true: 5,
+                    false: 6,
+                    [1, 2]: [3, 4]
+                }
+            ",
+                Hash(HashMap::from([
+                    (Object::String(String::from("one")), Integer(1)),
+                    (Object::String(String::from("two")), Integer(2)),
+                    (Object::String(String::from("three")), Integer(3)),
+                    (Integer(4), Integer(4)),
+                    (Boolean(true), Integer(5)),
+                    (Boolean(false), Integer(6)),
+                    (
+                        Array(vec![Integer(1), Integer(2)]),
+                        Array(vec![Integer(3), Integer(4)]),
+                    ),
+                ])),
+            ),
+            (
+                "
+                {
+                    unknown: true
+                }
+            ",
+                Error(String::from("identifier not found: unknown")),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
     fn index_expressions() {
         let scenarios = vec![
             ("[1, 2, 3][0]", Integer(1)),
@@ -667,6 +744,18 @@ mod tests {
                 Error(String::from(
                     "index operator not implemented for: Integer(123)",
                 )),
+            ),
+            (r#"{"foo": 5}["foo"]"#, Integer(5)),
+            (r#"{"foo": 5}["bar"]"#, Null),
+            (r#"let key = "foo"; {"foo": 5}[key]"#, Integer(5)),
+            (r#"{}["foo"]"#, Null),
+            (r#"{5: 5}[5]"#, Integer(5)),
+            (r#"{true: 5}[true]"#, Integer(5)),
+            (r#"{false: 5}[false]"#, Integer(5)),
+            (r#"{"name": "Monkey"}[fn(x) { x }];"#, Null),
+            (
+                r#"{fn(x) { x }: "Monkey"}[fn(x) { x }];"#,
+                Object::String(String::from("Monkey")),
             ),
         ];
         for (scenario, expected) in scenarios.into_iter() {

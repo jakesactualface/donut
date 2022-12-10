@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, hash::Hash, rc::Rc};
 
 use crate::parse::ast::{Expression, Statement};
 
@@ -12,12 +12,19 @@ pub enum Object {
     Error(String),
     Null,
     Array(Vec<Object>),
+    Hash(HashMap<Object, Object>),
     Function {
         parameters: Vec<Expression>,
         body: Statement,
         env: Rc<RefCell<Environment>>,
     },
     Builtin(String),
+}
+
+impl Hash for Object {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(&format!("{:?}", self).into_bytes());
+    }
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -60,5 +67,29 @@ impl Environment {
 impl fmt::Debug for Environment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Environment {{ store<keys>: {:?} }}", self.store.keys())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use pretty_assertions::assert_eq;
+
+    use super::Object;
+
+    #[test]
+    fn object_hash() {
+        let key1 = Object::String(String::from("Hello World!"));
+        let key2 = Object::String(String::from("Hello World!"));
+        let value = Object::Integer(1);
+        let mut hash_map: HashMap<Object, Object> = HashMap::new();
+
+        hash_map.insert(key1.clone(), value.clone());
+        hash_map.insert(key2.clone(), value.clone());
+
+        assert_eq!(1, hash_map.len());
+        assert_eq!(Some(&value), hash_map.get(&key1));
+        assert_eq!(Some(&value), hash_map.get(&key2));
     }
 }
