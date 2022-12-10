@@ -71,5 +71,5 @@ fn main() {
         .unwrap();
 
     // Wait for thread to join
-    child.join().unwrap();
+    child.join().unwrap_or_default();
 }
