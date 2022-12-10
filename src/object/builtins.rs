@@ -1,4 +1,4 @@
-use super::types::Object::{self, Error, Integer};
+use super::types::Object::{self, Error, Integer, Null};
 
 pub type BuiltinFunction = fn(&[Object]) -> Object;
 
@@ -7,6 +7,7 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
     "last" => last_builtin,
     "len" => len_builtin,
     "push" => push_builtin,
+    "puts" => puts_builtin,
     "rest" => rest_builtin,
 };
 
@@ -107,6 +108,16 @@ fn push_builtin(objects: &[Object]) -> Object {
         }
         (array, _) => Error(format!("Argument to `push` not supported: {:?}", array)),
     };
+}
+
+fn puts_builtin(objects: &[Object]) -> Object {
+    for object in objects.into_iter() {
+        match object {
+            Object::String(value) => println!("{}", value),
+            o => println!("{o:#?}"),
+        };
+    }
+    return Null;
 }
 
 fn rest_builtin(objects: &[Object]) -> Object {
