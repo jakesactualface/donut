@@ -643,26 +643,16 @@ mod tests {
         consequences: Vec<Statement>,
         alternatives: Option<Vec<Statement>>,
     ) -> Expression {
-        let map_statements_to_expressions = |s: Vec<Statement>| {
-            s.iter()
-                .map(|c| match c {
-                    Statement::Expression { value } => Statement::Expression {
-                        value: value.clone(),
-                    },
-                    _ => panic!("Expected expression but found {:?}", c),
-                })
-                .collect()
-        };
         let alt = match alternatives {
             Some(statement) => Some(Box::new(Statement::Block {
-                statements: map_statements_to_expressions(statement),
+                statements: statement,
             })),
             _ => None,
         };
         Expression::IfExpression {
             condition: Box::new(condition),
             consequence: Box::new(Statement::Block {
-                statements: map_statements_to_expressions(consequences),
+                statements: consequences,
             }),
             alternative: alt,
         }

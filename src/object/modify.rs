@@ -2,70 +2,146 @@ use crate::parse::ast::{Expression, Node, Statement, ToNode};
 
 pub type ModifierFunction = fn(Node) -> Node;
 
-pub fn modify(node: Node, modifier: ModifierFunction) -> Node {
-    return match node {
-        Node::Statement(statement) => modify_statement(statement, modifier),
-        Node::Expression(expression) => modify_expression(expression, modifier),
-        Node::Program(_) => todo!(),
-    };
+trait Modifiable {
+    fn modify(self, modifier: ModifierFunction) -> Self;
 }
 
-pub fn modify_statement(statement: Statement, modifier: ModifierFunction) -> Node {
-    match statement {
-        Statement::Expression { value } => modifier(value.to_node()),
-        _ => todo!(),
+impl Modifiable for Statement {
+    fn modify(self, modifier: ModifierFunction) -> Self {
+        let this_statement: Statement;
+        if let Node::Statement(statement) = modifier(self.to_node()) {
+            this_statement = statement;
+        } else {
+            panic!("Expected Statement node!");
+        }
+
+        match this_statement {
+            Statement::Expression { value } => Statement::Expression {
+                value: value.modify(modifier),
+            },
+            Statement::Block { statements } => {
+                let mut modified_statements: Vec<Statement> = vec![];
+                for statement in statements.into_iter() {
+                    modified_statements.push(statement.modify(modifier));
+                }
+                return Statement::Block {
+                    statements: modified_statements,
+                };
+            }
+            Statement::Return { value } => Statement::Return {
+                value: value.modify(modifier),
+            },
+            Statement::Let { name, value } => Statement::Let {
+                name,
+                value: value.modify(modifier),
+            },
+        }
     }
 }
 
-pub fn modify_expression(expression: Expression, modifier: ModifierFunction) -> Node {
-    return match expression {
-        Expression::InfixExpression {
-            left,
-            operator,
-            right,
-        } => match (
-            modify(left.to_node(), modifier),
-            modify(right.to_node(), modifier),
-        ) {
-            (Node::Expression(l), Node::Expression(r)) => {
-                Node::Expression(Expression::InfixExpression {
-                    left: Box::new(l),
-                    operator,
-                    right: Box::new(r),
-                })
-            }
-            _ => todo!(),
-        },
-        Expression::PrefixExpression { operator, value } => match modify(value.to_node(), modifier)
-        {
-            Node::Expression(e) => Node::Expression(Expression::PrefixExpression {
+impl Modifiable for Expression {
+    fn modify(self, modifier: ModifierFunction) -> Self {
+        let this_expression: Expression;
+        if let Node::Expression(expression) = modifier(self.to_node()) {
+            this_expression = expression;
+        } else {
+            panic!("Expected Expression node!");
+        }
+
+        return match this_expression {
+            Expression::InfixExpression {
+                left,
                 operator,
-                value: Box::new(e),
-            }),
-            _ => todo!(),
-        },
-        Expression::Integer { value } => modifier(Node::Expression(Expression::Integer { value })),
-        Expression::Index { value, index } => match (
-            modify(value.to_node(), modifier),
-            modify(index.to_node(), modifier),
-        ) {
-            (Node::Expression(v), Node::Expression(i)) => Node::Expression(Expression::Index {
-                value: Box::new(v),
-                index: Box::new(i),
-            }),
-            _ => todo!(),
-        },
-        e => todo!("No implementation for expression type: {:?}", e),
+                right,
+            } => Expression::InfixExpression {
+                left: Box::new(left.modify(modifier)),
+                operator,
+                right: Box::new(right.modify(modifier)),
+            },
+            Expression::PrefixExpression { operator, value } => Expression::PrefixExpression {
+                operator,
+                value: Box::new(value.modify(modifier)),
+            },
+            Expression::Integer { value } => Expression::Integer { value },
+            Expression::Index { value, index } => Expression::Index {
+                value: Box::new(value.modify(modifier)),
+                index: Box::new(index.modify(modifier)),
+            },
+            Expression::IfExpression {
+                condition,
+                consequence,
+                alternative,
+            } => {
+                let modified_alternative: Option<Box<Statement>>;
+                if let Some(a) = alternative {
+                    modified_alternative = Some(Box::new(a.modify(modifier)));
+                } else {
+                    modified_alternative = None;
+                }
+                return Expression::IfExpression {
+                    condition: Box::new(condition.modify(modifier)),
+                    consequence: Box::new(consequence.modify(modifier)),
+                    alternative: modified_alternative,
+                };
+            }
+            Expression::Function { parameters, body } => {
+                let mut modified_parameters: Vec<Expression> = vec![];
+                for parameter in parameters.into_iter() {
+                    modified_parameters.push(parameter.modify(modifier));
+                }
+                return Expression::Function {
+                    parameters: modified_parameters,
+                    body: Box::new(body.modify(modifier)),
+                };
+            }
+            Expression::Array { elements } => {
+                let mut modified_elements: Vec<Expression> = vec![];
+                for element in elements.into_iter() {
+                    modified_elements.push(element.modify(modifier));
+                }
+                return Expression::Array {
+                    elements: modified_elements,
+                };
+            }
+            Expression::Hash { pairs } => {
+                let mut modified_pairs: Vec<(Expression, Expression)> = vec![];
+                for (key, value) in pairs.into_iter() {
+                    modified_pairs.push((key.modify(modifier), value.modify(modifier)));
+                }
+                return Expression::Hash {
+                    pairs: modified_pairs,
+                };
+            }
+            e => todo!("No implementation for expression type: {:?}", e),
+        };
+    }
+}
+
+pub fn modify(node: Node, modifier: ModifierFunction) -> Node {
+    return match node {
+        Node::Statement(statement) => statement.modify(modifier).to_node(),
+        Node::Expression(expression) => expression.modify(modifier).to_node(),
+        Node::Program(statements) => {
+            let mut modified_statements: Vec<Statement> = vec![];
+            for statement in statements.into_iter() {
+                modified_statements.push(statement.modify(modifier));
+            }
+            return Node::Program(modified_statements);
+        }
     };
 }
 
 #[cfg(test)]
 mod tests {
     use super::{modify, ModifierFunction};
-    use crate::parse::ast::{Expression, Node, ToNode};
+    use crate::parse::ast::{Expression, Node, Statement, ToNode};
     use crate::token::types::Token::{self, Minus, Plus};
 
     use pretty_assertions::assert_eq;
+
+    fn statement(expression: Expression) -> Statement {
+        Statement::Expression { value: expression }
+    }
 
     fn int(value: i64) -> Expression {
         Expression::Integer { value }
@@ -93,6 +169,22 @@ mod tests {
         }
     }
 
+    fn if_expression(
+        condition: Expression,
+        consequence: Statement,
+        alternative: Option<Box<Statement>>,
+    ) -> Expression {
+        Expression::IfExpression {
+            condition: Box::new(condition),
+            consequence: Box::new(consequence),
+            alternative,
+        }
+    }
+
+    fn block(statements: Vec<Statement>) -> Statement {
+        Statement::Block { statements }
+    }
+
     fn turn_one_into_two(node: Node) -> Node {
         if let Node::Expression(Expression::Integer { value: 1 }) = node {
             return Node::Expression(Expression::Integer { value: 2 });
@@ -113,26 +205,88 @@ mod tests {
     #[test]
     fn modifiers() {
         let scenarios = vec![
-            (int(1), int(2), turn_one_into_two),
-            (int(2), int(2), turn_one_into_two),
+            (statement(int(1)), statement(int(2)), turn_one_into_two),
+            (statement(int(2)), statement(int(2)), turn_one_into_two),
             (
-                infix(int(1), Plus, int(2)),
-                infix(int(2), Plus, int(2)),
+                statement(infix(int(1), Plus, int(2))),
+                statement(infix(int(2), Plus, int(2))),
                 turn_one_into_two,
             ),
             (
-                infix(int(2), Plus, int(1)),
-                infix(int(2), Plus, int(2)),
+                statement(infix(int(2), Plus, int(1))),
+                statement(infix(int(2), Plus, int(2))),
                 turn_one_into_two,
             ),
             (
-                prefix(Minus, int(1)),
-                prefix(Minus, int(2)),
+                statement(prefix(Minus, int(1))),
+                statement(prefix(Minus, int(2))),
                 turn_one_into_two,
             ),
             (
-                index(int(1), int(1)),
-                index(int(2), int(2)),
+                statement(index(int(1), int(1))),
+                statement(index(int(2), int(2))),
+                turn_one_into_two,
+            ),
+            (
+                statement(if_expression(
+                    int(1),
+                    block(vec![Statement::Expression { value: int(1) }]),
+                    Some(Box::new(block(vec![Statement::Expression {
+                        value: int(1),
+                    }]))),
+                )),
+                statement(if_expression(
+                    int(2),
+                    block(vec![Statement::Expression { value: int(2) }]),
+                    Some(Box::new(block(vec![Statement::Expression {
+                        value: int(2),
+                    }]))),
+                )),
+                turn_one_into_two,
+            ),
+            (
+                Statement::Return { value: int(1) },
+                Statement::Return { value: int(2) },
+                turn_one_into_two,
+            ),
+            (
+                Statement::Let {
+                    name: String::from("a"),
+                    value: int(1),
+                },
+                Statement::Let {
+                    name: String::from("a"),
+                    value: int(2),
+                },
+                turn_one_into_two,
+            ),
+            (
+                statement(Expression::Function {
+                    parameters: vec![],
+                    body: Box::new(block(vec![Statement::Expression { value: int(1) }])),
+                }),
+                statement(Expression::Function {
+                    parameters: vec![],
+                    body: Box::new(block(vec![Statement::Expression { value: int(2) }])),
+                }),
+                turn_one_into_two,
+            ),
+            (
+                statement(Expression::Array {
+                    elements: vec![int(1), int(1)],
+                }),
+                statement(Expression::Array {
+                    elements: vec![int(2), int(2)],
+                }),
+                turn_one_into_two,
+            ),
+            (
+                statement(Expression::Hash {
+                    pairs: vec![(int(1), int(1))],
+                }),
+                statement(Expression::Hash {
+                    pairs: vec![(int(2), int(2))],
+                }),
                 turn_one_into_two,
             ),
         ];
