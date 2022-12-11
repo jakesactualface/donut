@@ -7,6 +7,7 @@ use crate::{
 
 use super::{
     builtins::{get_builtin, has_builtin},
+    modify::{Modifiable, ModifierFunction},
     types::{
         Environment,
         Object::{
@@ -147,6 +148,34 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
     }
 }
 
+fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, _env: Rc<RefCell<Environment>>) -> T {
+    let modifier: ModifierFunction;
+    modifier = |n| -> Node {
+        match n.clone() {
+            Node::Expression(Expression::Call {
+                function,
+                arguments,
+            }) => {
+                if let Expression::Identifier { name } = *function {
+                    if name == "unquote" {
+                        let arg = arguments.get(0).unwrap().clone();
+                        return eval(arg, Rc::new(RefCell::new(Environment::new()))).to_node();
+                    }
+                }
+                return n;
+            }
+            Node::Expression(Expression::Identifier { name }) => {
+                if name == "unquote" {
+                    return eval(n, Rc::new(RefCell::new(Environment::new()))).to_node();
+                }
+                return n;
+            }
+            _ => n,
+        }
+    };
+    return quoted.modify(modifier);
+}
+
 fn eval_index_expression(
     value: Box<Expression>,
     index: Box<Expression>,
@@ -282,7 +311,14 @@ fn eval_call_expression(
     }
 
     if Builtin(String::from("quote")) == evaluated {
-        return Quote(arguments.get(0).unwrap().clone());
+        if arguments.len() != 1 {
+            panic!("Expected single argument for Quote!");
+        }
+        return Quote(eval_unquoted(
+            arguments.get(0).unwrap().clone(),
+            env.clone(),
+        ));
+        // return Quote(arguments.get(0).unwrap().clone());
     }
 
     let mut evaluated_arguments: Vec<Object> = vec![];

@@ -8,8 +8,8 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
     "len" => len_builtin,
     "push" => push_builtin,
     "puts" => puts_builtin,
-    "quote" => quote_builtin,
     "rest" => rest_builtin,
+    "quote" => quote_builtin,
 };
 
 pub fn has_builtin(name: &str) -> bool {
@@ -121,11 +121,6 @@ fn puts_builtin(objects: &[Object]) -> Object {
     return Null;
 }
 
-fn quote_builtin(_objects: &[Object]) -> Object {
-    // Dummy implementation to support identifying calls to `quote`
-    return Null;
-}
-
 fn rest_builtin(objects: &[Object]) -> Object {
     if objects.len() != 1 {
         return Error(format!(
@@ -154,6 +149,11 @@ fn rest_builtin(objects: &[Object]) -> Object {
         }
         x => Error(format!("Argument to `rest` not supported: {:?}", x)),
     };
+}
+
+fn quote_builtin(_objects: &[Object]) -> Object {
+    // Dummy implementation to support identifying calls to `quote`
+    return Null;
 }
 
 #[cfg(test)]

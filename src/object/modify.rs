@@ -2,7 +2,7 @@ use crate::parse::ast::{Expression, Node, Statement, ToNode};
 
 pub type ModifierFunction = fn(Node) -> Node;
 
-trait Modifiable {
+pub trait Modifiable {
     fn modify(self, modifier: ModifierFunction) -> Self;
 }
 
@@ -49,6 +49,7 @@ impl Modifiable for Expression {
         }
 
         return match this_expression {
+            Expression::Identifier { name } => Expression::Identifier { name },
             Expression::InfixExpression {
                 left,
                 operator,

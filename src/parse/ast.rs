@@ -11,6 +11,12 @@ pub trait ToNode {
     fn to_node(self: Self) -> Node;
 }
 
+impl ToNode for Node {
+    fn to_node(self: Self) -> Node {
+        return self;
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Statement {
     Let { name: String, value: Expression },

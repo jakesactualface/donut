@@ -1,7 +1,7 @@
 use core::fmt;
 use std::{cell::RefCell, collections::HashMap, hash::Hash, rc::Rc};
 
-use crate::parse::ast::{Expression, Statement};
+use crate::parse::ast::{Expression, Node, Statement, ToNode};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Object {
@@ -25,6 +25,15 @@ pub enum Object {
 impl Hash for Object {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         state.write(&format!("{:?}", self).into_bytes());
+    }
+}
+
+impl ToNode for Object {
+    fn to_node(self: Self) -> Node {
+        match self {
+            Object::Integer(i) => Node::Expression(Expression::Integer { value: i }),
+            o => todo!("Not implemented for object: {o:?}"),
+        }
     }
 }
 
