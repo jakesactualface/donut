@@ -19,6 +19,7 @@ pub enum Object {
         env: Rc<RefCell<Environment>>,
     },
     Builtin(String),
+    Quote(Expression),
 }
 
 impl Hash for Object {

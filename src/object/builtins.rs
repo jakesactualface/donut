@@ -8,6 +8,7 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
     "len" => len_builtin,
     "push" => push_builtin,
     "puts" => puts_builtin,
+    "quote" => quote_builtin,
     "rest" => rest_builtin,
 };
 
@@ -117,6 +118,11 @@ fn puts_builtin(objects: &[Object]) -> Object {
             o => println!("{o:#?}"),
         };
     }
+    return Null;
+}
+
+fn quote_builtin(_objects: &[Object]) -> Object {
+    // Dummy implementation to support identifying calls to `quote`
     return Null;
 }
 

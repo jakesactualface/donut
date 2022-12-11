@@ -9,7 +9,9 @@ use super::{
     builtins::{get_builtin, has_builtin},
     types::{
         Environment,
-        Object::{self, Array, Boolean, Builtin, Error, Function, Hash, Integer, Null, Return},
+        Object::{
+            self, Array, Boolean, Builtin, Error, Function, Hash, Integer, Null, Quote, Return,
+        },
     },
 };
 
@@ -278,6 +280,11 @@ fn eval_call_expression(
     if let Error(_) = evaluated {
         return evaluated;
     }
+
+    if Builtin(String::from("quote")) == evaluated {
+        return Quote(arguments.get(0).unwrap().clone());
+    }
+
     let mut evaluated_arguments: Vec<Object> = vec![];
     for argument in arguments.into_iter() {
         let evaluated_argument = eval(argument, env.clone());
@@ -350,7 +357,7 @@ mod tests {
             evaluator::eval,
             types::{
                 Environment,
-                Object::{self, Array, Boolean, Error, Function, Hash, Integer, Null},
+                Object::{self, Array, Boolean, Error, Function, Hash, Integer, Null, Quote},
             },
         },
         parse::{
@@ -766,6 +773,63 @@ mod tests {
     #[test]
     fn builtin_functions() {
         let scenarios = vec![(r#"len("")"#, Integer(0))];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn quote_unquote() {
+        let scenarios = vec![
+            ("quote(5)", Quote(Expression::Integer { value: 5 })),
+            (
+                "quote(5 + 8)",
+                Quote(Expression::InfixExpression {
+                    left: Box::new(Expression::Integer { value: 5 }),
+                    operator: Token::Plus,
+                    right: Box::new(Expression::Integer { value: 8 }),
+                }),
+            ),
+            (
+                "quote(foobar)",
+                Quote(Expression::Identifier {
+                    name: String::from("foobar"),
+                }),
+            ),
+            (
+                "quote(foobar + barfoo)",
+                Quote(Expression::InfixExpression {
+                    left: Box::new(Expression::Identifier {
+                        name: String::from("foobar"),
+                    }),
+                    operator: Token::Plus,
+                    right: Box::new(Expression::Identifier {
+                        name: String::from("barfoo"),
+                    }),
+                }),
+            ),
+            ("quote(unquote(4))", Quote(Expression::Integer { value: 4 })),
+            (
+                "quote(unquote(4 + 4))",
+                Quote(Expression::Integer { value: 8 }),
+            ),
+            (
+                "quote(8 + unquote(4 + 4))",
+                Quote(Expression::InfixExpression {
+                    left: Box::new(Expression::Integer { value: 8 }),
+                    operator: Token::Plus,
+                    right: Box::new(Expression::Integer { value: 8 }),
+                }),
+            ),
+            (
+                "quote(unquote(4 + 4) + 8)",
+                Quote(Expression::InfixExpression {
+                    left: Box::new(Expression::Integer { value: 8 }),
+                    operator: Token::Plus,
+                    right: Box::new(Expression::Integer { value: 8 }),
+                }),
+            ),
+        ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, expected);
         }
