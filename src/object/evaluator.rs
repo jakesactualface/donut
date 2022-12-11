@@ -148,9 +148,9 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
     }
 }
 
-fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, _env: Rc<RefCell<Environment>>) -> T {
+fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, env: Rc<RefCell<Environment>>) -> T {
     let modifier: ModifierFunction;
-    modifier = |n| -> Node {
+    modifier = |n, e| -> Node {
         match n.clone() {
             Node::Expression(Expression::Call {
                 function,
@@ -159,7 +159,7 @@ fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, _env: Rc<RefCell<Environment
                 if let Expression::Identifier { name } = *function {
                     if name == "unquote" {
                         let arg = arguments.get(0).unwrap().clone();
-                        return eval(arg, Rc::new(RefCell::new(Environment::new()))).to_node();
+                        return eval(arg, e).to_node();
                     }
                 }
                 return n;
@@ -173,7 +173,7 @@ fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, _env: Rc<RefCell<Environment
             _ => n,
         }
     };
-    return quoted.modify(modifier);
+    return quoted.modify(modifier, env);
 }
 
 fn eval_index_expression(
@@ -420,6 +420,24 @@ mod tests {
             "Failure on scenario {}, expected: {:#?}, actual: {:#?}",
             scenario, expected, evaluated
         );
+    }
+
+    fn assert_multiple_objects_scenario(scenario: &str, expected_objects: Vec<Object>) {
+        let lexer = Lexer::new(scenario);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program();
+        let env = Rc::new(RefCell::new(Environment::new()));
+        assert_eq!(Vec::<String>::new(), parser.errors);
+
+        for (i, statement) in program.statements.into_iter().enumerate() {
+            let expected_object = expected_objects.get(i).unwrap().clone();
+            let evaluated = eval(statement, env.clone());
+            assert_eq!(
+                expected_object, evaluated,
+                "Failure on scenario {}, expected: {:#?}, actual: {:#?}",
+                scenario, expected_object, evaluated
+            );
+        }
     }
 
     #[test]
@@ -817,24 +835,24 @@ mod tests {
     #[test]
     fn quote_unquote() {
         let scenarios = vec![
-            ("quote(5)", Quote(Expression::Integer { value: 5 })),
+            ("quote(5)", vec![Quote(Expression::Integer { value: 5 })]),
             (
                 "quote(5 + 8)",
-                Quote(Expression::InfixExpression {
+                vec![Quote(Expression::InfixExpression {
                     left: Box::new(Expression::Integer { value: 5 }),
                     operator: Token::Plus,
                     right: Box::new(Expression::Integer { value: 8 }),
-                }),
+                })],
             ),
             (
                 "quote(foobar)",
-                Quote(Expression::Identifier {
+                vec![Quote(Expression::Identifier {
                     name: String::from("foobar"),
-                }),
+                })],
             ),
             (
                 "quote(foobar + barfoo)",
-                Quote(Expression::InfixExpression {
+                vec![Quote(Expression::InfixExpression {
                     left: Box::new(Expression::Identifier {
                         name: String::from("foobar"),
                     }),
@@ -842,32 +860,61 @@ mod tests {
                     right: Box::new(Expression::Identifier {
                         name: String::from("barfoo"),
                     }),
-                }),
+                })],
             ),
-            ("quote(unquote(4))", Quote(Expression::Integer { value: 4 })),
+            (
+                "quote(unquote(4))",
+                vec![Quote(Expression::Integer { value: 4 })],
+            ),
             (
                 "quote(unquote(4 + 4))",
-                Quote(Expression::Integer { value: 8 }),
+                vec![Quote(Expression::Integer { value: 8 })],
             ),
             (
                 "quote(8 + unquote(4 + 4))",
-                Quote(Expression::InfixExpression {
+                vec![Quote(Expression::InfixExpression {
                     left: Box::new(Expression::Integer { value: 8 }),
                     operator: Token::Plus,
                     right: Box::new(Expression::Integer { value: 8 }),
-                }),
+                })],
             ),
             (
                 "quote(unquote(4 + 4) + 8)",
-                Quote(Expression::InfixExpression {
+                vec![Quote(Expression::InfixExpression {
                     left: Box::new(Expression::Integer { value: 8 }),
                     operator: Token::Plus,
                     right: Box::new(Expression::Integer { value: 8 }),
-                }),
+                })],
+            ),
+            (
+                "
+                    let foobar = 8;
+                    quote(foobar)
+                    foobar
+                ",
+                vec![
+                    Integer(8),
+                    Quote(Expression::Identifier {
+                        name: String::from("foobar"),
+                    }),
+                    Integer(8),
+                ],
+            ),
+            (
+                "
+                    let foobar = 8;
+                    quote(unquote(foobar))
+                    foobar
+                ",
+                vec![
+                    Integer(8),
+                    Quote(Expression::Integer { value: 8 }),
+                    Integer(8),
+                ],
             ),
         ];
         for (scenario, expected) in scenarios.into_iter() {
-            assert_object_scenario(scenario, expected);
+            assert_multiple_objects_scenario(scenario, expected);
         }
     }
 }

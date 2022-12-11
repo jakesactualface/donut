@@ -1,15 +1,19 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::parse::ast::{Expression, Node, Statement, ToNode};
 
-pub type ModifierFunction = fn(Node) -> Node;
+use super::types::Environment;
+
+pub type ModifierFunction = fn(Node, Rc<RefCell<Environment>>) -> Node;
 
 pub trait Modifiable {
-    fn modify(self, modifier: ModifierFunction) -> Self;
+    fn modify(self, modifier: ModifierFunction, env: Rc<RefCell<Environment>>) -> Self;
 }
 
 impl Modifiable for Statement {
-    fn modify(self, modifier: ModifierFunction) -> Self {
+    fn modify(self, modifier: ModifierFunction, env: Rc<RefCell<Environment>>) -> Self {
         let this_statement: Statement;
-        if let Node::Statement(statement) = modifier(self.to_node()) {
+        if let Node::Statement(statement) = modifier(self.to_node(), env.clone()) {
             this_statement = statement;
         } else {
             panic!("Expected Statement node!");
@@ -17,32 +21,32 @@ impl Modifiable for Statement {
 
         match this_statement {
             Statement::Expression { value } => Statement::Expression {
-                value: value.modify(modifier),
+                value: value.modify(modifier, env.clone()),
             },
             Statement::Block { statements } => {
                 let mut modified_statements: Vec<Statement> = vec![];
                 for statement in statements.into_iter() {
-                    modified_statements.push(statement.modify(modifier));
+                    modified_statements.push(statement.modify(modifier, env.clone()));
                 }
                 return Statement::Block {
                     statements: modified_statements,
                 };
             }
             Statement::Return { value } => Statement::Return {
-                value: value.modify(modifier),
+                value: value.modify(modifier, env.clone()),
             },
             Statement::Let { name, value } => Statement::Let {
                 name,
-                value: value.modify(modifier),
+                value: value.modify(modifier, env.clone()),
             },
         }
     }
 }
 
 impl Modifiable for Expression {
-    fn modify(self, modifier: ModifierFunction) -> Self {
+    fn modify(self, modifier: ModifierFunction, env: Rc<RefCell<Environment>>) -> Self {
         let this_expression: Expression;
-        if let Node::Expression(expression) = modifier(self.to_node()) {
+        if let Node::Expression(expression) = modifier(self.to_node(), env.clone()) {
             this_expression = expression;
         } else {
             panic!("Expected Expression node!");
@@ -55,18 +59,18 @@ impl Modifiable for Expression {
                 operator,
                 right,
             } => Expression::InfixExpression {
-                left: Box::new(left.modify(modifier)),
+                left: Box::new(left.modify(modifier, env.clone())),
                 operator,
-                right: Box::new(right.modify(modifier)),
+                right: Box::new(right.modify(modifier, env.clone())),
             },
             Expression::PrefixExpression { operator, value } => Expression::PrefixExpression {
                 operator,
-                value: Box::new(value.modify(modifier)),
+                value: Box::new(value.modify(modifier, env.clone())),
             },
             Expression::Integer { value } => Expression::Integer { value },
             Expression::Index { value, index } => Expression::Index {
-                value: Box::new(value.modify(modifier)),
-                index: Box::new(index.modify(modifier)),
+                value: Box::new(value.modify(modifier, env.clone())),
+                index: Box::new(index.modify(modifier, env.clone())),
             },
             Expression::IfExpression {
                 condition,
@@ -75,30 +79,30 @@ impl Modifiable for Expression {
             } => {
                 let modified_alternative: Option<Box<Statement>>;
                 if let Some(a) = alternative {
-                    modified_alternative = Some(Box::new(a.modify(modifier)));
+                    modified_alternative = Some(Box::new(a.modify(modifier, env.clone())));
                 } else {
                     modified_alternative = None;
                 }
                 return Expression::IfExpression {
-                    condition: Box::new(condition.modify(modifier)),
-                    consequence: Box::new(consequence.modify(modifier)),
+                    condition: Box::new(condition.modify(modifier, env.clone())),
+                    consequence: Box::new(consequence.modify(modifier, env.clone())),
                     alternative: modified_alternative,
                 };
             }
             Expression::Function { parameters, body } => {
                 let mut modified_parameters: Vec<Expression> = vec![];
                 for parameter in parameters.into_iter() {
-                    modified_parameters.push(parameter.modify(modifier));
+                    modified_parameters.push(parameter.modify(modifier, env.clone()));
                 }
                 return Expression::Function {
                     parameters: modified_parameters,
-                    body: Box::new(body.modify(modifier)),
+                    body: Box::new(body.modify(modifier, env.clone())),
                 };
             }
             Expression::Array { elements } => {
                 let mut modified_elements: Vec<Expression> = vec![];
                 for element in elements.into_iter() {
-                    modified_elements.push(element.modify(modifier));
+                    modified_elements.push(element.modify(modifier, env.clone()));
                 }
                 return Expression::Array {
                     elements: modified_elements,
@@ -107,7 +111,10 @@ impl Modifiable for Expression {
             Expression::Hash { pairs } => {
                 let mut modified_pairs: Vec<(Expression, Expression)> = vec![];
                 for (key, value) in pairs.into_iter() {
-                    modified_pairs.push((key.modify(modifier), value.modify(modifier)));
+                    modified_pairs.push((
+                        key.modify(modifier, env.clone()),
+                        value.modify(modifier, env.clone()),
+                    ));
                 }
                 return Expression::Hash {
                     pairs: modified_pairs,
@@ -118,14 +125,14 @@ impl Modifiable for Expression {
     }
 }
 
-pub fn modify(node: Node, modifier: ModifierFunction) -> Node {
+pub fn modify(node: Node, modifier: ModifierFunction, env: Rc<RefCell<Environment>>) -> Node {
     return match node {
-        Node::Statement(statement) => statement.modify(modifier).to_node(),
-        Node::Expression(expression) => expression.modify(modifier).to_node(),
+        Node::Statement(statement) => statement.modify(modifier, env).to_node(),
+        Node::Expression(expression) => expression.modify(modifier, env).to_node(),
         Node::Program(statements) => {
             let mut modified_statements: Vec<Statement> = vec![];
             for statement in statements.into_iter() {
-                modified_statements.push(statement.modify(modifier));
+                modified_statements.push(statement.modify(modifier, env.clone()));
             }
             return Node::Program(modified_statements);
         }
@@ -134,7 +141,11 @@ pub fn modify(node: Node, modifier: ModifierFunction) -> Node {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
     use super::{modify, ModifierFunction};
+    use crate::object::types::Environment;
     use crate::parse::ast::{Expression, Node, Statement, ToNode};
     use crate::token::types::Token::{self, Minus, Plus};
 
@@ -186,7 +197,7 @@ mod tests {
         Statement::Block { statements }
     }
 
-    fn turn_one_into_two(node: Node) -> Node {
+    fn turn_one_into_two(node: Node, _env: Rc<RefCell<Environment>>) -> Node {
         if let Node::Expression(Expression::Integer { value: 1 }) = node {
             return Node::Expression(Expression::Integer { value: 2 });
         }
@@ -195,7 +206,11 @@ mod tests {
 
     fn assert_modifier(actual: impl ToNode, expected: impl ToNode, modifier: ModifierFunction) {
         let expected_node = expected.to_node();
-        let modified = modify(actual.to_node(), modifier);
+        let modified = modify(
+            actual.to_node(),
+            modifier,
+            Rc::new(RefCell::new(Environment::new())),
+        );
         assert_eq!(
             expected_node, modified,
             "Expected: {:#?}, actual: {:#?}",
