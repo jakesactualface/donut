@@ -53,7 +53,6 @@ impl Modifiable for Expression {
         }
 
         return match this_expression {
-            Expression::Identifier { name } => Expression::Identifier { name },
             Expression::InfixExpression {
                 left,
                 operator,
@@ -67,7 +66,6 @@ impl Modifiable for Expression {
                 operator,
                 value: Box::new(value.modify(modifier, env.clone())),
             },
-            Expression::Integer { value } => Expression::Integer { value },
             Expression::Index { value, index } => Expression::Index {
                 value: Box::new(value.modify(modifier, env.clone())),
                 index: Box::new(index.modify(modifier, env.clone())),
@@ -120,7 +118,20 @@ impl Modifiable for Expression {
                     pairs: modified_pairs,
                 };
             }
-            e => todo!("No implementation for expression type: {:?}", e),
+            Expression::Call {
+                function,
+                arguments,
+            } => {
+                let mut modified_arguments: Vec<Expression> = vec![];
+                for argument in arguments.into_iter() {
+                    modified_arguments.push(argument.modify(modifier, env.clone()));
+                }
+                return Expression::Call {
+                    function,
+                    arguments: modified_arguments,
+                };
+            }
+            _ => this_expression,
         };
     }
 }

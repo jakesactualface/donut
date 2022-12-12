@@ -912,6 +912,54 @@ mod tests {
                     Integer(8),
                 ],
             ),
+            (
+                "quote(unquote(true))",
+                vec![Quote(Expression::Boolean { value: true })],
+            ),
+            (
+                "quote(unquote(false))",
+                vec![Quote(Expression::Boolean { value: false })],
+            ),
+            (
+                "quote(unquote([1, 2, 3]))",
+                vec![Quote(Expression::Array {
+                    elements: vec![
+                        Expression::Integer { value: 1 },
+                        Expression::Integer { value: 2 },
+                        Expression::Integer { value: 3 },
+                    ],
+                })],
+            ),
+            (
+                "quote(unquote(quote(4 + 4)))",
+                vec![Quote(Expression::InfixExpression {
+                    left: Box::new(Expression::Integer { value: 4 }),
+                    operator: Token::Plus,
+                    right: Box::new(Expression::Integer { value: 4 }),
+                })],
+            ),
+            (
+                "
+                    let quotedInfixExpression = quote(4 + 4);
+                    quote(unquote(4 + 4) + unquote(quotedInfixExpression))
+                ",
+                vec![
+                    Quote(Expression::InfixExpression {
+                        left: Box::new(Expression::Integer { value: 4 }),
+                        operator: Token::Plus,
+                        right: Box::new(Expression::Integer { value: 4 }),
+                    }),
+                    Quote(Expression::InfixExpression {
+                        left: Box::new(Expression::Integer { value: 8 }),
+                        operator: Token::Plus,
+                        right: Box::new(Expression::InfixExpression {
+                            left: Box::new(Expression::Integer { value: 4 }),
+                            operator: Token::Plus,
+                            right: Box::new(Expression::Integer { value: 4 }),
+                        }),
+                    }),
+                ],
+            ),
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_multiple_objects_scenario(scenario, expected);

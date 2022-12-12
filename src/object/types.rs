@@ -31,8 +31,35 @@ impl Hash for Object {
 impl ToNode for Object {
     fn to_node(self: Self) -> Node {
         match self {
-            Object::Integer(i) => Node::Expression(Expression::Integer { value: i }),
-            o => todo!("Not implemented for object: {o:?}"),
+            Object::Integer(value) => Node::Expression(Expression::Integer { value }),
+            Object::Boolean(value) => Node::Expression(Expression::Boolean { value }),
+            Object::String(value) => Node::Expression(Expression::String { value }),
+            Object::Array(elements) => {
+                let expressions = elements
+                    .into_iter()
+                    .map(|e| match e.to_node() {
+                        Node::Expression(e) => e,
+                        _ => todo!(),
+                    })
+                    .collect();
+                return Node::Expression(Expression::Array {
+                    elements: expressions,
+                });
+            }
+            Object::Hash(pairs) => {
+                let expression_pairs = pairs
+                    .into_iter()
+                    .map(|(key, value)| match (key.to_node(), value.to_node()) {
+                        (Node::Expression(k), Node::Expression(v)) => (k, v),
+                        _ => todo!(),
+                    })
+                    .collect();
+                return Node::Expression(Expression::Hash {
+                    pairs: expression_pairs,
+                });
+            }
+            Object::Quote(expression) => expression.to_node(),
+            object => todo!("Not implemented for object: {object:?}"),
         }
     }
 }
