@@ -20,6 +20,11 @@ pub enum Object {
     },
     Builtin(String),
     Quote(Expression),
+    Macro {
+        parameters: Vec<Expression>,
+        body: Statement,
+        env: Rc<RefCell<Environment>>,
+    },
 }
 
 impl Hash for Object {
@@ -66,7 +71,7 @@ impl ToNode for Object {
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct Environment {
-    store: HashMap<String, Object>,
+    pub store: HashMap<String, Object>,
     outer: Option<Rc<RefCell<Environment>>>,
 }
 

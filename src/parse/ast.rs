@@ -78,6 +78,10 @@ pub enum Expression {
         function: Box<Expression>,
         arguments: Vec<Expression>,
     },
+    Macro {
+        parameters: Vec<Expression>,
+        body: Box<Statement>,
+    },
 }
 
 impl ToNode for Expression {

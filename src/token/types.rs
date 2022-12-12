@@ -33,6 +33,7 @@ pub enum Token {
     Else,
     Return,
     Illegal,
+    Macro,
 }
 
 #[derive(Clone, PartialEq, PartialOrd)]

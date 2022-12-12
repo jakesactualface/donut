@@ -47,6 +47,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::LBracket, move |p| p.parse_array_literal());
         parser.register_prefix(Token::LBrace, move |p| p.parse_hash_literal());
         parser.register_prefix(Token::Function, move |p| p.parse_function_literal());
+        parser.register_prefix(Token::Macro, move |p| p.parse_macro_literal());
         parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::NotEqual, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::LT, move |p, e| p.parse_infix_expression(e));
@@ -289,6 +290,21 @@ impl<'a> Parser<'a> {
             return None;
         }
         return Some(Expression::Function {
+            parameters,
+            body: Box::new(self.parse_block_statement().unwrap()),
+        });
+    }
+
+    fn parse_macro_literal(&mut self) -> Option<Expression> {
+        if !self.expect_peek(Token::LParen) {
+            return None;
+        }
+        let parameters = self.parse_function_parameters();
+
+        if !self.expect_peek(Token::LBrace) {
+            return None;
+        }
+        return Some(Expression::Macro {
             parameters,
             body: Box::new(self.parse_block_statement().unwrap()),
         });
@@ -693,6 +709,13 @@ mod tests {
         }
     }
 
+    fn macro_literal(parameters: Vec<Expression>, body: Vec<Statement>) -> Expression {
+        Expression::Macro {
+            parameters,
+            body: Box::new(Statement::Block { statements: body }),
+        }
+    }
+
     #[test]
     fn prefix_expressions() {
         let scenarios = vec![
@@ -1055,6 +1078,22 @@ mod tests {
                 ])],
             ),
         ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn macro_literals() {
+        let scenarios = vec![(
+            "macro(x, y) { x + y; }",
+            vec![macro_literal(
+                vec![ident("x"), ident("y")],
+                vec![Statement::Expression {
+                    value: infix(ident("x"), Plus, ident("y")),
+                }],
+            )],
+        )];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);
         }

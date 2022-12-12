@@ -145,6 +145,10 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
         } => {
             return eval_call_expression(function, arguments, env);
         }
+        Expression::Macro {
+            parameters: _parameters,
+            body: _body,
+        } => todo!(),
     }
 }
 

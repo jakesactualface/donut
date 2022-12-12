@@ -144,6 +144,7 @@ static KEYWORDS: phf::Map<&'static str, Token> = phf::phf_map! {
     "if" => Token::If,
     "else" => Token::Else,
     "return" => Token::Return,
+    "macro" => Token::Macro,
 };
 
 fn is_word_char(c: &char) -> bool {
@@ -214,6 +215,7 @@ mod tests {
             \"foo\\nbar\"
             [1, 2];
             {\"foo\": \"bar\"}
+            macro(x, y) { x + y; };
         ";
         let expected = vec![
             Token::Let,
@@ -305,6 +307,19 @@ mod tests {
             Token::Colon,
             Token::String(String::from("bar")),
             Token::RBrace,
+            Token::Macro,
+            Token::LParen,
+            Token::Identifier(String::from("x")),
+            Token::Comma,
+            Token::Identifier(String::from("y")),
+            Token::RParen,
+            Token::LBrace,
+            Token::Identifier(String::from("x")),
+            Token::Plus,
+            Token::Identifier(String::from("y")),
+            Token::Semicolon,
+            Token::RBrace,
+            Token::Semicolon,
         ];
         assert_tokens(expected, Lexer::new(input));
     }
