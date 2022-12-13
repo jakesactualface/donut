@@ -98,9 +98,8 @@ fn expand_macros(program: &mut Program, env: Rc<RefCell<Environment>>) -> Progra
 fn is_macro_call(expression: Expression, env: Rc<RefCell<Environment>>) -> Option<Object> {
     match expression {
         Expression::Identifier { name } => {
-            if let Some(retrieved_object) = env.borrow().get(&name) {
-                // return Some(retrieved_object);
-                todo!()
+            if let Some(retrieved_object) = env.borrow_mut().get(&name) {
+                return Rc::try_unwrap(retrieved_object).ok();
             } else {
                 return None;
             }
@@ -117,7 +116,7 @@ fn get_param_name(param: Expression) -> String {
 }
 
 fn quote_arguments(args: Vec<Expression>) -> Vec<Object> {
-    todo!()
+    args.into_iter().map(Object::Quote).collect()
 }
 
 fn extend_macro_environment(
