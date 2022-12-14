@@ -49,50 +49,51 @@ fn is_macro<'r>((_, statement): &'r (usize, Statement)) -> bool {
 }
 
 fn expand_macros(program: &mut Program, env: Rc<RefCell<Environment>>) -> Program {
-    let modifier = |node: Node, env: Rc<RefCell<Environment>>| -> Node {
-        let call_expression: Expression;
-        let call_arguments: Vec<Expression>;
-
-        if let Node::Expression(Expression::Call {
-            function,
-            arguments,
-        }) = node.to_owned()
-        {
-            call_expression = *function;
-            call_arguments = arguments;
-        } else {
-            return node;
-        }
-
-        let macro_object = is_macro_call(call_expression, env);
-        if let Some(Object::Macro {
-            parameters,
-            body,
-            env,
-        }) = macro_object
-        {
-            let args = quote_arguments(call_arguments);
-            let param_names: Vec<String> = parameters.into_iter().map(get_param_name).collect();
-            let eval_env = extend_macro_environment(env, param_names, args);
-            let evaluated = eval(body, eval_env);
-            if let Object::Quote(_) = evaluated {
-                return evaluated.to_node();
-            } else {
-                panic!("Expected returned Node from macro");
-            }
-        } else {
-            return node;
-        }
-    };
-
     return Program {
         statements: program
             .statements
             .clone()
             .into_iter()
-            .map(|s| s.modify(modifier, env.clone()))
+            .map(|s| s.modify(macro_modifier, env.clone()))
             .collect(),
     };
+}
+
+fn macro_modifier(node: Node, env: Rc<RefCell<Environment>>) -> Node {
+    let call_expression: Expression;
+    let call_arguments: Vec<Expression>;
+
+    if let Node::Expression(Expression::Call {
+        function,
+        arguments,
+    }) = node.to_owned()
+    {
+        call_expression = *function;
+        call_arguments = arguments;
+    } else {
+        return node;
+    }
+
+    let macro_object = is_macro_call(call_expression, env);
+    if let Some(Object::Macro {
+        parameters,
+        body,
+        env,
+    }) = macro_object
+    {
+        let args = quote_arguments(call_arguments);
+        let param_names: Vec<String> = parameters.into_iter().map(get_param_name).collect();
+        let eval_env = extend_macro_environment(env, param_names, args);
+        let evaluated = eval(body, eval_env);
+
+        if let Object::Quote(_) = evaluated {
+            return evaluated.to_node();
+        } else {
+            panic!("Expected returned Quote from macro");
+        }
+    } else {
+        return node;
+    }
 }
 
 fn is_macro_call(expression: Expression, env: Rc<RefCell<Environment>>) -> Option<Object> {
@@ -235,6 +236,20 @@ mod tests {
                     reverse(2 + 2, 10 - 5);
                 ",
                 "(10 - 5) - (2 + 2)",
+            ),
+            (
+                "
+                    let unless = macro(condition, consequence, alternative) {
+                        quote(if (!(unquote(condition))) {
+                            unquote(consequence);
+                        } else {
+                            unquote(alternative);
+                        });
+                    };
+
+                    unless(10 > 5, puts(\"not greater\"), puts(\"greater\"));
+                ",
+                "if (!(10 > 5)) { puts(\"not greater\") } else { puts(\"greater\") }",
             ),
         ];
 
