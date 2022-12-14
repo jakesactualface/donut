@@ -6,6 +6,8 @@ use std::thread;
 
 use donut::console::repl::Repl;
 use donut::object::evaluator::eval;
+use donut::object::macro_expansion::define_macros;
+use donut::object::macro_expansion::expand_macros;
 use donut::object::types::Environment;
 
 const STACK_SIZE: usize = 4 * 1024 * 1024;
@@ -16,12 +18,16 @@ fn run() {
 
     let repl = Repl::new();
     let env = Rc::new(RefCell::new(Environment::new()));
+    let macro_env = Rc::new(RefCell::new(Environment::new()));
     let mut writer = BufWriter::new(std::io::stdout());
     let mut input: String = String::default();
 
     if let Some(pipe) = args.get(1) {
-        let output = repl.run(&pipe);
-        println!("{:?}", eval(output, env.clone()));
+        let mut output = repl.run(&pipe);
+        define_macros(&mut output, macro_env.clone());
+        let expanded = expand_macros(&mut output, macro_env.clone());
+
+        println!("{:?}", eval(expanded, env.clone()));
     } else {
         println!("Welcome to the Donut REPL!");
         println!("Use command 'exit' to exit the prompt.");
@@ -45,9 +51,12 @@ fn run() {
                 continue;
             }
 
-            let output = repl.run(&input);
+            let mut output = repl.run(&input);
+            define_macros(&mut output, macro_env.clone());
+            let expanded = expand_macros(&mut output, macro_env.clone());
+
             input = String::default();
-            println!("{:?}", eval(output, env.clone()));
+            println!("{:?}", eval(expanded, env.clone()));
         }
     }
 }

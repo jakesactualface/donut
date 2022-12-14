@@ -48,7 +48,7 @@ fn is_macro<'r>((_, statement): &'r (usize, Statement)) -> bool {
     }
 }
 
-fn expand_macros(program: &mut Program, env: Rc<RefCell<Environment>>) -> Program {
+pub fn expand_macros(program: &mut Program, env: Rc<RefCell<Environment>>) -> Program {
     return Program {
         statements: program
             .statements
@@ -142,7 +142,7 @@ mod tests {
     use crate::{
         object::{
             macro_expansion::{define_macros, expand_macros},
-            types::{Environment, Object::Quote},
+            types::Environment,
         },
         parse::{
             ast::{
