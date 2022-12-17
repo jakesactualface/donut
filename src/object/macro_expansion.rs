@@ -251,6 +251,35 @@ mod tests {
                 ",
                 "if (!(10 > 5)) { puts(\"not greater\") } else { puts(\"greater\") }",
             ),
+            (
+                "
+                    let for = macro(counter, body) {
+                        quote(
+                            if (true) {
+                                let loop = fn(c) {
+                                    if ( c > 0 ) {
+                                        unquote(body);
+                                        loop( c - 1 );
+                                    }
+                                };
+                                loop(unquote(counter));
+                            }
+                        );
+                    };
+                    for(5, puts(\"test\"));
+                ",
+                "
+                    if (true) {
+                        let loop = fn(c) {
+                            if (c > 0) {
+                                puts(\"test\");
+                                loop(c - 1);
+                            }
+                        };
+                        loop(5);
+                    }
+                ",
+            ),
         ];
 
         for (input, expected) in scenarios.into_iter() {
