@@ -144,6 +144,7 @@ static KEYWORDS: phf::Map<&'static str, Token> = phf::phf_map! {
     "false" => Token::False,
     "if" => Token::If,
     "else" => Token::Else,
+    "while" => Token::While,
     "return" => Token::Return,
     "macro" => Token::Macro,
 };
@@ -217,6 +218,8 @@ mod tests {
             [1, 2];
             {\"foo\": \"bar\"}
             macro(x, y) { x + y; };
+            mut a = 10;
+            while (true) { mut a = a + 1; };
         ";
         let expected = vec![
             Token::Let,
@@ -318,6 +321,25 @@ mod tests {
             Token::Identifier(String::from("x")),
             Token::Plus,
             Token::Identifier(String::from("y")),
+            Token::Semicolon,
+            Token::RBrace,
+            Token::Semicolon,
+            Token::Mutate,
+            Token::Identifier(String::from("a")),
+            Token::Assignment,
+            Token::Integer(10),
+            Token::Semicolon,
+            Token::While,
+            Token::LParen,
+            Token::True,
+            Token::RParen,
+            Token::LBrace,
+            Token::Mutate,
+            Token::Identifier(String::from("a")),
+            Token::Assignment,
+            Token::Identifier(String::from("a")),
+            Token::Plus,
+            Token::Integer(1),
             Token::Semicolon,
             Token::RBrace,
             Token::Semicolon,

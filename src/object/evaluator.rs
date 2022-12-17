@@ -118,6 +118,9 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
         } => {
             return eval_if_expression(*condition, consequence, alternative, env);
         }
+        Expression::WhileExpression { condition, body } => {
+            return eval_while_expression(*condition, body, env);
+        }
         Expression::Array { elements } => {
             let mut evaluated_elements: Vec<Object> = vec![];
             for element in elements.into_iter() {
@@ -288,14 +291,7 @@ fn eval_if_expression(
     alternative: Option<Box<Statement>>,
     env: Rc<RefCell<Environment>>,
 ) -> Object {
-    let truthy = match eval(condition, env.clone()) {
-        Integer(0) => false,
-        Integer(1) => true,
-        TRUE => true,
-        FALSE => false,
-        NULL => false,
-        _ => true,
-    };
+    let truthy = is_truthy(condition, env.clone());
 
     if truthy {
         return eval(*consequence, env);
@@ -303,6 +299,28 @@ fn eval_if_expression(
         return eval(*alternative.unwrap(), env);
     }
     return NULL;
+}
+
+fn eval_while_expression(
+    condition: Expression,
+    body: Box<Statement>,
+    env: Rc<RefCell<Environment>>,
+) -> Object {
+    while is_truthy(condition.clone(), env.clone()) {
+        eval(*body.clone(), env.clone());
+    }
+    return NULL;
+}
+
+fn is_truthy(expression: Expression, env: Rc<RefCell<Environment>>) -> bool {
+    match eval(expression, env) {
+        Integer(0) => false,
+        Integer(1) => true,
+        TRUE => true,
+        FALSE => false,
+        NULL => false,
+        _ => true,
+    }
 }
 
 fn eval_call_expression(
@@ -548,6 +566,28 @@ mod tests {
             ("if (1 > 2) { 10 }", Null),
             ("if (1 > 2) { 10 } else { 20 }", Integer(20)),
             ("if (1 < 2) { 10 } else { 20 }", Integer(10)),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn while_expressions() {
+        let scenarios = vec![
+            ("while (false) { 10 }", Null),
+            (
+                "let a = 1; while (a < 5) { mut a = a + 1; }; a;",
+                Integer(5),
+            ),
+            (
+                "let a = 10; while (a < 5) { mut a = a + 1; }; a;",
+                Integer(10),
+            ),
+            (
+                "let a = 1; while (a < 10000) { mut a = a + 1; }; a;",
+                Integer(10000),
+            ),
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, expected);

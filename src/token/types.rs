@@ -32,6 +32,7 @@ pub enum Token {
     False,
     If,
     Else,
+    While,
     Return,
     Illegal,
     Macro,

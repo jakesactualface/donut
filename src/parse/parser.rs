@@ -44,6 +44,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::Minus, move |p| p.parse_prefix_expression());
         parser.register_prefix(Token::LParen, move |p| p.parse_grouped_expression());
         parser.register_prefix(Token::If, move |p| p.parse_if_expression());
+        parser.register_prefix(Token::While, move |p| p.parse_while_expression());
         parser.register_prefix(Token::LBracket, move |p| p.parse_array_literal());
         parser.register_prefix(Token::LBrace, move |p| p.parse_hash_literal());
         parser.register_prefix(Token::Function, move |p| p.parse_function_literal());
@@ -428,6 +429,27 @@ impl<'a> Parser<'a> {
         });
     }
 
+    fn parse_while_expression(&mut self) -> Option<Expression> {
+        if !self.expect_peek(Token::LParen) {
+            return None;
+        }
+        self.next();
+        let condition = self.parse_expression(Precedence::Lowest).unwrap();
+
+        if !self.expect_peek(Token::RParen) {
+            return None;
+        }
+        if !self.expect_peek(Token::LBrace) {
+            return None;
+        }
+        let body = self.parse_block_statement().unwrap();
+
+        return Some(Expression::WhileExpression {
+            condition: Box::new(condition),
+            body: Box::new(body),
+        });
+    }
+
     fn parse_block_statement(&mut self) -> Option<Statement> {
         let mut statements: Vec<Statement> = vec![];
         loop {
@@ -695,6 +717,13 @@ mod tests {
                 statements: consequences,
             }),
             alternative: alt,
+        }
+    }
+
+    fn while_literal(condition: Expression, body: Vec<Statement>) -> Expression {
+        Expression::WhileExpression {
+            condition: Box::new(condition),
+            body: Box::new(Statement::Block { statements: body }),
         }
     }
 
@@ -995,6 +1024,20 @@ mod tests {
                 )],
             ),
         ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn while_expressions() {
+        let scenarios = vec![(
+            "while (x < y) { x }",
+            vec![while_literal(
+                infix(ident("x"), LT, ident("y")),
+                vec![Statement::Expression { value: ident("x") }],
+            )],
+        )];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);
         }

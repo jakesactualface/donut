@@ -60,6 +60,10 @@ pub enum Expression {
         consequence: Box<Statement>,
         alternative: Option<Box<Statement>>,
     },
+    WhileExpression {
+        condition: Box<Expression>,
+        body: Box<Statement>,
+    },
     Array {
         elements: Vec<Expression>,
     },
