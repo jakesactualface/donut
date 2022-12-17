@@ -139,6 +139,7 @@ impl<'a> Lexer<'a> {
 static KEYWORDS: phf::Map<&'static str, Token> = phf::phf_map! {
     "fn" => Token::Function,
     "let" => Token::Let,
+    "mut" => Token::Mutate,
     "true" => Token::True,
     "false" => Token::False,
     "if" => Token::If,

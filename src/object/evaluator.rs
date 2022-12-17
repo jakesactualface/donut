@@ -149,6 +149,7 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
             parameters: _parameters,
             body: _body,
         } => todo!(),
+        Expression::Mutation { target, value } => eval_mutation_expression(*target, *value, env),
     }
 }
 
@@ -322,7 +323,6 @@ fn eval_call_expression(
             arguments.get(0).unwrap().clone(),
             env.clone(),
         ));
-        // return Quote(arguments.get(0).unwrap().clone());
     }
 
     let mut evaluated_arguments: Vec<Object> = vec![];
@@ -386,6 +386,26 @@ fn eval_hash_expression(
     }
 
     return Hash(hash);
+}
+
+fn eval_mutation_expression(
+    target: Expression,
+    value: Expression,
+    env: Rc<RefCell<Environment>>,
+) -> Object {
+    let evaluated = eval(value, env.clone());
+    if let Error(_) = evaluated {
+        return evaluated;
+    }
+
+    let target_name: String;
+    if let Expression::Identifier { name } = target {
+        target_name = name;
+    } else {
+        panic!("Expected identifier!");
+    }
+
+    return env.borrow_mut().reassign(target_name, evaluated.clone());
 }
 
 #[cfg(test)]
@@ -632,6 +652,32 @@ mod tests {
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, Integer(expected));
+        }
+    }
+
+    #[test]
+    fn mutations() {
+        let scenarios = vec![
+            ("let a = 5; mut a = 10; a;", Integer(10)),
+            ("let a = 5; mut a = a * 5; a;", Integer(25)),
+            ("let a = 5; let b = a; mut a = 10; b;", Integer(5)),
+            ("let a = 5; let b = a; mut b = 10; b;", Integer(10)),
+            ("let a = 5; let b = 10; mut a = b; b;", Integer(10)),
+            (
+                "let a = 5; let update = fn(x) { mut a = x + 10; }; update(1); a;",
+                Integer(11),
+            ),
+            (
+                "let a = 5; let update = fn(x) { mut a = x + 10; }; update(1);",
+                Integer(11),
+            ),
+            (
+                "mut a = 5;",
+                Error(String::from("No previous declaration for identifier: a")),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
         }
     }
 

@@ -48,6 +48,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::LBrace, move |p| p.parse_hash_literal());
         parser.register_prefix(Token::Function, move |p| p.parse_function_literal());
         parser.register_prefix(Token::Macro, move |p| p.parse_macro_literal());
+        parser.register_prefix(Token::Mutate, move |p| p.parse_mutate_expression());
         parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::NotEqual, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::LT, move |p, e| p.parse_infix_expression(e));
@@ -308,6 +309,29 @@ impl<'a> Parser<'a> {
             parameters,
             body: Box::new(self.parse_block_statement().unwrap()),
         });
+    }
+
+    fn parse_mutate_expression(&mut self) -> Option<Expression> {
+        let target_name: String;
+
+        if let Some(Token::Identifier(name)) = self.lexer.peek() {
+            target_name = name.clone();
+        } else {
+            self.peek_error(Token::Identifier(String::default()));
+            return None;
+        }
+
+        self.next();
+        if !self.expect_peek(Token::Assignment) {
+            return None;
+        }
+
+        self.next();
+        let value = self.parse_expression(Precedence::Lowest).unwrap();
+        Some(Expression::Mutation {
+            target: Box::new(Expression::Identifier { name: target_name }),
+            value: Box::new(value),
+        })
     }
 
     fn parse_function_parameters(&mut self) -> Vec<Expression> {
@@ -716,6 +740,13 @@ mod tests {
         }
     }
 
+    fn mutation(target: Expression, value: Expression) -> Expression {
+        Expression::Mutation {
+            target: Box::new(target),
+            value: Box::new(value),
+        }
+    }
+
     #[test]
     fn prefix_expressions() {
         let scenarios = vec![
@@ -1094,6 +1125,21 @@ mod tests {
                 }],
             )],
         )];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn mutation_expressions() {
+        let scenarios = vec![
+            ("mut a = 1;", vec![mutation(ident("a"), int(1))]),
+            ("mut a = b;", vec![mutation(ident("a"), ident("b"))]),
+            (
+                "mut a = (1 + 1);",
+                vec![mutation(ident("a"), infix(int(1), Plus, int(1)))],
+            ),
+        ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);
         }

@@ -82,6 +82,10 @@ pub enum Expression {
         parameters: Vec<Expression>,
         body: Box<Statement>,
     },
+    Mutation {
+        target: Box<Expression>,
+        value: Box<Expression>,
+    },
 }
 
 impl ToNode for Expression {

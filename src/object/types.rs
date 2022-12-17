@@ -104,6 +104,17 @@ impl Environment {
         self.store.insert(name, value.clone());
         return value;
     }
+
+    pub fn reassign(&mut self, name: String, value: Object) -> Object {
+        if let Some(_) = self.store.get(&name) {
+            self.store.insert(name, value.clone());
+            return value;
+        } else if let Some(outer) = &self.outer {
+            outer.borrow_mut().set(name, value.clone());
+            return value;
+        }
+        return Object::Error(format!("No previous declaration for identifier: {name}",));
+    }
 }
 
 impl fmt::Debug for Environment {

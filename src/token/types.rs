@@ -27,6 +27,7 @@ pub enum Token {
     RBracket,
     Function,
     Let,
+    Mutate,
     True,
     False,
     If,
