@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     fs::File,
     io::{BufRead, BufReader, Lines, Result},
     path::Path,
@@ -16,6 +17,7 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
     "push" => push_builtin,
     "puts" => puts_builtin,
     "rest" => rest_builtin,
+    "sort" => sort_builtin,
     "quote" => quote_builtin,
     "toInt" => to_int_builtin,
 };
@@ -188,6 +190,43 @@ fn rest_builtin(objects: &[Object]) -> Object {
             Object::Array(elements.iter().skip(1).map(|e| e.clone()).collect())
         }
         x => Error(format!("Argument to `rest` not supported: {:?}", x)),
+    };
+}
+
+fn sort_builtin(objects: &[Object]) -> Object {
+    if objects.len() != 1 {
+        return Error(format!(
+            "Wrong number of arguments for `sort`. got:{}, want:1",
+            objects.len()
+        ));
+    }
+    let compare_integer_objects = |a: &Object, b: &Object| -> Ordering {
+        match (a, b) {
+            (Object::Integer(l), Object::Integer(r)) => {
+                if l == r {
+                    return Ordering::Equal;
+                } else if l < r {
+                    return Ordering::Less;
+                } else {
+                    return Ordering::Greater;
+                }
+            }
+            _ => todo!(),
+        }
+    };
+    return match &objects[0] {
+        Object::Array(elements) => {
+            if elements.len() == 0 {
+                return Error(format!(
+                    "Argument to `sort` has no elements: {:?}",
+                    &objects[0]
+                ));
+            }
+            let mut sorted_elements = elements.clone();
+            sorted_elements.sort_by(compare_integer_objects);
+            Object::Array(sorted_elements)
+        }
+        x => Error(format!("Argument to `sort` not supported: {:?}", x)),
     };
 }
 
@@ -368,6 +407,32 @@ mod tests {
                 r#"rest([])"#,
                 Error(String::from(
                     "Argument to `rest` has no elements: Array([])",
+                )),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn sort() {
+        let scenarios = vec![
+            (
+                r#"sort([3, 4, 2, 1])"#,
+                Array(vec![Integer(1), Integer(2), Integer(3), Integer(4)]),
+            ),
+            (r#"sort([1])"#, Array(vec![Integer(1)])),
+            (
+                r#"sort([])"#,
+                Error(String::from(
+                    "Argument to `sort` has no elements: Array([])",
+                )),
+            ),
+            (
+                r#"sort([], [])"#,
+                Error(String::from(
+                    "Wrong number of arguments for `sort`. got:2, want:1",
                 )),
             ),
         ];
