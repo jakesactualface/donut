@@ -1,8 +1,15 @@
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Lines, Result},
+    path::Path,
+};
+
 use super::types::Object::{self, Error, Integer, Null};
 
 pub type BuiltinFunction = fn(&[Object]) -> Object;
 
 static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
+    "fileLines" => file_lines_builtin,
     "first" => first_builtin,
     "last" => last_builtin,
     "len" => len_builtin,
@@ -18,6 +25,38 @@ pub fn has_builtin(name: &str) -> bool {
 
 pub fn get_builtin(name: &str) -> &BuiltinFunction {
     BUILTINS.get(name).unwrap()
+}
+
+fn file_lines_builtin(objects: &[Object]) -> Object {
+    if objects.len() != 1 {
+        return Error(format!(
+            "Wrong number of arguments for `fileLines`. got:{}, want:1",
+            objects.len()
+        ));
+    }
+    return match &objects[0] {
+        Object::String(value) => {
+            if let Ok(lines_iter) = read_lines(value) {
+                return Object::Array(
+                    lines_iter
+                        .map(|lines| Object::String(lines.ok().unwrap_or_default()))
+                        .collect(),
+                );
+            }
+            Error(format!(
+                "Argument to `fileLines` cannot be opened: {value:?}"
+            ))
+        }
+        x => Error(format!("Argument to `fileLines` not supported: {x:?}")),
+    };
+}
+
+fn read_lines<P>(filename: P) -> Result<Lines<BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filename)?;
+    Ok(BufReader::new(file).lines())
 }
 
 fn first_builtin(objects: &[Object]) -> Object {
