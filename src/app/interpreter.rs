@@ -10,14 +10,14 @@ use crate::{
     token::lexer::Lexer,
 };
 
-pub struct Repl {
+pub struct Interpreter {
     eval_env: Rc<RefCell<Environment>>,
     macro_env: Rc<RefCell<Environment>>,
 }
 
-impl Repl {
+impl Interpreter {
     pub fn new() -> Self {
-        Repl {
+        Interpreter {
             eval_env: Rc::new(RefCell::new(Environment::new())),
             macro_env: Rc::new(RefCell::new(Environment::new())),
         }

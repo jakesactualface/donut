@@ -2,7 +2,7 @@ use std::io::prelude::*;
 use std::io::BufWriter;
 use std::thread;
 
-use donut::console::repl::Repl;
+use donut::app::interpreter::Interpreter;
 
 const STACK_SIZE: usize = 4 * 1024 * 1024;
 const PROMPT: &'static str = ">>";
@@ -10,12 +10,12 @@ const PROMPT: &'static str = ">>";
 fn run() {
     let args: Vec<_> = std::env::args().collect();
 
-    let repl = Repl::new();
+    let interpreter = Interpreter::new();
     let mut writer = BufWriter::new(std::io::stdout());
     let mut input: String = String::default();
 
     if let Some(pipe) = args.get(1) {
-        println!("{:?}", repl.run(&pipe));
+        println!("{:?}", interpreter.run(&pipe));
     } else {
         println!("Welcome to the Donut REPL!");
         println!("Use command 'exit' to exit the prompt.");
@@ -39,7 +39,7 @@ fn run() {
                 continue;
             }
 
-            println!("{:?}", repl.run(&input));
+            println!("{:?}", interpreter.run(&input));
             input = String::default();
         }
     }
