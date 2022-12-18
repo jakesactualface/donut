@@ -43,6 +43,7 @@ pub enum Token {
 #[derive(Clone, PartialEq, PartialOrd)]
 pub enum Precedence {
     Lowest,
+    AndOr,       // && or ||
     Equals,      // ==
     LessGreater, // > or <
     Sum,         // +
@@ -54,8 +55,8 @@ pub enum Precedence {
 
 lazy_static! {
     static ref PRECEDENCES: HashMap<Token, Precedence> = HashMap::from([
-        (Token::And, Precedence::Equals),
-        (Token::Or, Precedence::Equals),
+        (Token::And, Precedence::AndOr),
+        (Token::Or, Precedence::AndOr),
         (Token::Equal, Precedence::Equals),
         (Token::NotEqual, Precedence::Equals),
         (Token::LT, Precedence::LessGreater),
