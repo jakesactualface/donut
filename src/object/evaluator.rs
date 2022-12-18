@@ -100,17 +100,16 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
             left,
             operator,
             right,
-        } => match (eval(*left, env.clone()), eval(*right, env.clone())) {
-            (Error(left), _) => {
-                return Error(left);
-            }
-            (_, Error(right)) => {
-                return Error(right);
-            }
-            (left, right) => {
-                return eval_infix_expression(operator, left, right, env);
-            }
-        },
+        } => {
+            return eval_infix_expression(*left, operator, *right, env);
+        }
+        Expression::ShortCircuitExpression {
+            left,
+            operator,
+            right,
+        } => {
+            return eval_short_circuit_expression(*left, operator, *right, env);
+        }
         Expression::IfExpression {
             condition,
             consequence,
@@ -148,11 +147,11 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
         } => {
             return eval_call_expression(function, arguments, env);
         }
+        Expression::Mutation { target, value } => eval_mutation_expression(*target, *value, env),
         Expression::Macro {
             parameters: _parameters,
             body: _body,
-        } => todo!(),
-        Expression::Mutation { target, value } => eval_mutation_expression(*target, *value, env),
+        } => panic!("Cannot evaluate unexpanded macro!"),
     }
 }
 
@@ -258,12 +257,27 @@ fn eval_prefix_expression(
 }
 
 fn eval_infix_expression(
+    left: Expression,
     operator: Token,
-    left: Object,
-    right: Object,
-    _env: Rc<RefCell<Environment>>,
+    right: Expression,
+    env: Rc<RefCell<Environment>>,
 ) -> Object {
-    match (operator, left, right) {
+    let evaluated_left: Object;
+    let evaluated_right: Object;
+    match (eval(left, env.clone()), eval(right, env.clone())) {
+        (Error(left), _) => {
+            return Error(left);
+        }
+        (_, Error(right)) => {
+            return Error(right);
+        }
+        (left, right) => {
+            evaluated_left = left;
+            evaluated_right = right;
+        }
+    };
+
+    match (operator, evaluated_left, evaluated_right) {
         (operator, Integer(l), Integer(r)) => match operator {
             Token::Plus => Integer(l + r),
             Token::Minus => Integer(l - r),
@@ -286,6 +300,35 @@ fn eval_infix_expression(
             Error(format!("type mismatch: {:?} {:?} {:?}", l, operator, r))
         }
         (operator, l, r) => Error(format!("unknown operator: {:?} {:?} {:?}", l, operator, r)),
+    }
+}
+
+fn eval_short_circuit_expression(
+    left: Expression,
+    operator: Token,
+    right: Expression,
+    env: Rc<RefCell<Environment>>,
+) -> Object {
+    match operator {
+        Token::And => {
+            let evaluated_left = eval(left, env.clone());
+            return match evaluated_left {
+                Error(_) => evaluated_left,
+                Boolean(false) => evaluated_left,
+                Boolean(true) => eval(right, env.clone()),
+                _ => panic!("Expected boolean expression!"),
+            };
+        }
+        Token::Or => {
+            let evaluated_left = eval(left, env.clone());
+            return match evaluated_left {
+                Error(_) => evaluated_left,
+                Boolean(true) => evaluated_left,
+                Boolean(false) => eval(right, env.clone()),
+                _ => panic!("Expected boolean expression!"),
+            };
+        }
+        _ => panic!("Expected boolean operand!"),
     }
 }
 
@@ -578,6 +621,43 @@ mod tests {
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, Boolean(expected));
+        }
+    }
+
+    #[test]
+    fn short_circuit_boolean_expressions() {
+        let scenarios = vec![
+            (
+                "let a = 1; true && ( if (true) { mut a = 2; true; } ) a;",
+                Integer(2),
+            ),
+            (
+                "let a = 1; false && ( if (true) { mut a = 2; true; } ) a;",
+                Integer(1),
+            ),
+            (
+                "let a = 1; true || ( if (true) { mut a = 2; true; } ) a;",
+                Integer(1),
+            ),
+            (
+                "let a = 1; false || ( if (true) { mut a = 2; true; } ) a;",
+                Integer(2),
+            ),
+            (
+                "let a = 1; false || ( if (true) { mut a = 2; true; } ) a;",
+                Integer(2),
+            ),
+            (
+                "let a = 1; false || ( if (false) { mut a = 2; true; } ) a;",
+                Integer(1),
+            ),
+            (
+                "let a = 1; (a < 2) && ( if (true) { mut a = 2; true; } ) a;",
+                Integer(2),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
         }
     }
 

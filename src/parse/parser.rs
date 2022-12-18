@@ -52,8 +52,8 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::Mutate, move |p| p.parse_mutate_expression());
         parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::NotEqual, move |p, e| p.parse_infix_expression(e));
-        parser.register_infix(Token::And, move |p, e| p.parse_infix_expression(e));
-        parser.register_infix(Token::Or, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::And, move |p, e| p.parse_short_circuit_expression(e));
+        parser.register_infix(Token::Or, move |p, e| p.parse_short_circuit_expression(e));
         parser.register_infix(Token::LT, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::GT, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::Plus, move |p, e| p.parse_infix_expression(e));
@@ -495,6 +495,30 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_short_circuit_expression(&mut self, left: Box<Expression>) -> Option<Expression> {
+        let operator: Token;
+        if let Some(token) = &self.current {
+            operator = token.clone();
+            self.next();
+        } else {
+            self.errors.push(format!(
+                "No short circuit expression found for token {:?}",
+                &self.current
+            ));
+            return None;
+        }
+        if let Some(right) = self.parse_expression(operator.precedence().clone()) {
+            return Some(Expression::ShortCircuitExpression {
+                left,
+                operator,
+                right: Box::new(right),
+            });
+        } else {
+            self.errors.push(String::from("Missing expression!"));
+            return None;
+        }
+    }
+
     fn parse_call_expression(&mut self, function: Box<Expression>) -> Option<Expression> {
         Some(Expression::Call {
             function,
@@ -698,6 +722,14 @@ mod tests {
 
     fn infix(left: Expression, operator: Token, right: Expression) -> Expression {
         Expression::InfixExpression {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        }
+    }
+
+    fn short_circuit(left: Expression, operator: Token, right: Expression) -> Expression {
+        Expression::ShortCircuitExpression {
             left: Box::new(left),
             operator,
             right: Box::new(right),
@@ -1002,8 +1034,31 @@ mod tests {
                 "false == false",
                 vec![infix(bool(false), Equal, bool(false))],
             ),
-            ("true && true", vec![infix(bool(true), And, bool(true))]),
-            ("false || false", vec![infix(bool(false), Or, bool(false))]),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn short_circuit_expressions() {
+        let scenarios = vec![
+            (
+                "true && true",
+                vec![short_circuit(bool(true), And, bool(true))],
+            ),
+            (
+                "false || false",
+                vec![short_circuit(bool(false), Or, bool(false))],
+            ),
+            (
+                "(1 < 2) && true",
+                vec![short_circuit(infix(int(1), LT, int(2)), And, bool(true))],
+            ),
+            (
+                "false || 1 < 2",
+                vec![short_circuit(bool(false), Or, infix(int(1), LT, int(2)))],
+            ),
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);

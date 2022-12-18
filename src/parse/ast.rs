@@ -55,6 +55,11 @@ pub enum Expression {
         operator: Token,
         right: Box<Expression>,
     },
+    ShortCircuitExpression {
+        left: Box<Expression>,
+        operator: Token,
+        right: Box<Expression>,
+    },
     IfExpression {
         condition: Box<Expression>,
         consequence: Box<Statement>,
