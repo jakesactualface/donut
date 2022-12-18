@@ -309,7 +309,18 @@ fn eval_while_expression(
     env: Rc<RefCell<Environment>>,
 ) -> Object {
     while is_truthy(condition.clone(), env.clone()) {
-        eval(*body.clone(), env.clone());
+        let evaluated = eval(*body.clone(), env.clone());
+        match evaluated {
+            // Statement was a "return" statement, propagate
+            Return(_) => {
+                return evaluated;
+            }
+            // Statement was an "error" statement, propagate
+            Error(_) => {
+                return evaluated;
+            }
+            _ => (),
+        };
     }
     return NULL;
 }
