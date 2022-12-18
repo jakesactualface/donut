@@ -17,6 +17,7 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
     "puts" => puts_builtin,
     "rest" => rest_builtin,
     "quote" => quote_builtin,
+    "toInt" => to_int_builtin,
 };
 
 pub fn has_builtin(name: &str) -> bool {
@@ -195,6 +196,30 @@ fn quote_builtin(_objects: &[Object]) -> Object {
     return Null;
 }
 
+fn to_int_builtin(objects: &[Object]) -> Object {
+    if objects.len() != 1 {
+        return Error(format!(
+            "Wrong number of arguments for `rest`. got:{}, want:1",
+            objects.len()
+        ));
+    }
+    return match &objects[0] {
+        Object::String(value) => {
+            if let Ok(int) = value.parse::<i64>() {
+                return Object::Integer(int);
+            } else {
+                return Error(format!(
+                    "Argument to `toInt` could not be parsed to integer: {value:?}"
+                ));
+            }
+        }
+        Object::Integer(int) => {
+            return Object::Integer(int.to_owned());
+        }
+        x => Error(format!("Argument to `toInt` not supported: {:?}", x)),
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -343,6 +368,31 @@ mod tests {
                 r#"rest([])"#,
                 Error(String::from(
                     "Argument to `rest` has no elements: Array([])",
+                )),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn to_int() {
+        let scenarios = vec![
+            (r#"toInt("123")"#, Object::Integer(123)),
+            (r#"toInt("-123")"#, Object::Integer(-123)),
+            (r#"toInt(123)"#, Object::Integer(123)),
+            (r#"toInt(-123)"#, Object::Integer(-123)),
+            (
+                r#"toInt("not a number")"#,
+                Object::Error(String::from(
+                    "Argument to `toInt` could not be parsed to integer: \"not a number\"",
+                )),
+            ),
+            (
+                r#"toInt([1, 2, 3])"#,
+                Object::Error(String::from(
+                    "Argument to `toInt` not supported: Array([Integer(1), Integer(2), Integer(3)])",
                 )),
             ),
         ];
