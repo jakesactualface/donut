@@ -60,6 +60,22 @@ impl<'a> Lexer<'a> {
                 }
                 _ => Token::Bang,
             },
+            '&' => match self.input.peek() {
+                Some('&') => {
+                    // Consume evaluated ampersand
+                    self.next();
+                    return Token::And;
+                }
+                _ => Token::Illegal,
+            },
+            '|' => match self.input.peek() {
+                Some('|') => {
+                    // Consume evaluated bar
+                    self.next();
+                    return Token::Or;
+                }
+                _ => Token::Illegal,
+            },
             '*' => Token::Asterisk,
             '/' => Token::Slash,
             '<' => Token::LT,
@@ -220,6 +236,8 @@ mod tests {
             macro(x, y) { x + y; };
             mut a = 10;
             while (true) { mut a = a + 1; };
+            true && true;
+            false || false;
         ";
         let expected = vec![
             Token::Let,
@@ -342,6 +360,14 @@ mod tests {
             Token::Integer(1),
             Token::Semicolon,
             Token::RBrace,
+            Token::Semicolon,
+            Token::True,
+            Token::And,
+            Token::True,
+            Token::Semicolon,
+            Token::False,
+            Token::Or,
+            Token::False,
             Token::Semicolon,
         ];
         assert_tokens(expected, Lexer::new(input));

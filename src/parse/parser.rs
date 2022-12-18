@@ -52,6 +52,8 @@ impl<'a> Parser<'a> {
         parser.register_prefix(Token::Mutate, move |p| p.parse_mutate_expression());
         parser.register_infix(Token::Equal, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::NotEqual, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::And, move |p, e| p.parse_infix_expression(e));
+        parser.register_infix(Token::Or, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::LT, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::GT, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::Plus, move |p, e| p.parse_infix_expression(e));
@@ -548,7 +550,9 @@ mod tests {
         parse::ast::{Expression, Statement},
         token::{
             lexer::Lexer,
-            types::Token::{self, Asterisk, Bang, Equal, Minus, NotEqual, Plus, Slash, GT, LT},
+            types::Token::{
+                self, And, Asterisk, Bang, Equal, Minus, NotEqual, Or, Plus, Slash, GT, LT,
+            },
         },
     };
     use pretty_assertions::assert_eq;
@@ -998,6 +1002,8 @@ mod tests {
                 "false == false",
                 vec![infix(bool(false), Equal, bool(false))],
             ),
+            ("true && true", vec![infix(bool(true), And, bool(true))]),
+            ("false || false", vec![infix(bool(false), Or, bool(false))]),
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);

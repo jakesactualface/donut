@@ -14,6 +14,8 @@ pub enum Token {
     Slash,
     Equal,
     NotEqual,
+    And,
+    Or,
     LT,
     GT,
     Comma,
@@ -52,6 +54,8 @@ pub enum Precedence {
 
 lazy_static! {
     static ref PRECEDENCES: HashMap<Token, Precedence> = HashMap::from([
+        (Token::And, Precedence::Equals),
+        (Token::Or, Precedence::Equals),
         (Token::Equal, Precedence::Equals),
         (Token::NotEqual, Precedence::Equals),
         (Token::LT, Precedence::LessGreater),

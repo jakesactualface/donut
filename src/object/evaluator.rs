@@ -276,6 +276,8 @@ fn eval_infix_expression(
             operator => Error(format!("unknown operator: {:?} {:?} {:?}", l, operator, r)),
         },
         (Token::Plus, Object::String(l), Object::String(r)) => Object::String(l + &r),
+        (Token::And, Object::Boolean(l), Object::Boolean(r)) => Object::Boolean(l && r),
+        (Token::Or, Object::Boolean(l), Object::Boolean(r)) => Object::Boolean(l || r),
         (Token::Equal, l, r) => native_bool_to_boolean(l == r),
         (Token::NotEqual, l, r) => native_bool_to_boolean(l != r),
         (operator, l, r) if discriminant(&l) != discriminant(&r) => {
@@ -550,6 +552,16 @@ mod tests {
             ("\"Hello\" != \"Hello\"", false),
             ("\"Hello\" == \"World\"", false),
             ("\"Hello\" != \"World\"", true),
+            ("true && true", true),
+            ("true && false", false),
+            ("false && false", false),
+            ("(1 < 2) && true", true),
+            ("(1 > 2) && true", false),
+            ("true || true", true),
+            ("true || false", true),
+            ("false || false", false),
+            ("(1 < 2) || true", true),
+            ("(1 > 2) || true", true),
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, Boolean(expected));
