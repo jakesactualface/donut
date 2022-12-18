@@ -276,6 +276,8 @@ fn eval_infix_expression(
             operator => Error(format!("unknown operator: {:?} {:?} {:?}", l, operator, r)),
         },
         (Token::Plus, Object::String(l), Object::String(r)) => Object::String(l + &r),
+        (Token::Plus, Object::String(l), r) => Object::String(format!("{l}{r:?}")),
+        (Token::Plus, l, Object::String(r)) => Object::String(format!("{l:?}{r}")),
         (Token::And, Object::Boolean(l), Object::Boolean(r)) => Object::Boolean(l && r),
         (Token::Or, Object::Boolean(l), Object::Boolean(r)) => Object::Boolean(l || r),
         (Token::Equal, l, r) => native_bool_to_boolean(l == r),
