@@ -3,6 +3,7 @@ use std::{
     fs::File,
     io::{BufRead, BufReader, Lines, Result},
     path::Path,
+    sync::Mutex,
 };
 
 use super::types::Object::{self, Error, Integer, Null};
@@ -28,6 +29,16 @@ pub fn has_builtin(name: &str) -> bool {
 
 pub fn get_builtin(name: &str) -> &BuiltinFunction {
     BUILTINS.get(name).unwrap()
+}
+
+static OUTPUT: Mutex<Vec<String>> = Mutex::new(vec![]);
+
+fn do_print(output: String) {
+    OUTPUT.lock().unwrap().push(output);
+}
+
+pub fn get_output() -> Vec<String> {
+    return OUTPUT.lock().unwrap().drain(..).collect();
 }
 
 fn file_lines_builtin(objects: &[Object]) -> Object {
@@ -156,8 +167,8 @@ fn push_builtin(objects: &[Object]) -> Object {
 fn puts_builtin(objects: &[Object]) -> Object {
     for object in objects.into_iter() {
         match object {
-            Object::String(value) => println!("{}", value),
-            o => println!("{o:#?}"),
+            Object::String(value) => do_print(format!("{}", value)),
+            o => do_print(format!("{o:#?}")),
         };
     }
     return Null;

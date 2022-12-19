@@ -1,68 +1,177 @@
-use std::io::prelude::*;
-use std::io::BufWriter;
-use std::thread;
+use std::error::Error;
+use std::io;
+use unicode_width::UnicodeWidthStr;
+
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use tui::{
+    backend::{Backend, CrosstermBackend},
+    layout::{Constraint, Direction, Layout},
+    style::{Modifier, Style},
+    text::{Span, Spans, Text},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
+    Frame, Terminal,
+};
 
 use donut::app::interpreter::Interpreter;
 
-const STACK_SIZE: usize = 4 * 1024 * 1024;
-const PROMPT: &'static str = ">>";
+struct Repl {
+    input: String,
+    command_history: Vec<String>,
+    last_eval: String,
+    interpreter: Interpreter,
+    outputs: Vec<String>,
+}
 
-fn run() {
-    let args: Vec<_> = std::env::args().collect();
-
-    let interpreter = Interpreter::new();
-    let mut writer = BufWriter::new(std::io::stdout());
-    let mut input: String = String::default();
-
-    if let Some(pipe) = args.get(1) {
-        println!("{:?}", interpreter.run(&pipe));
-    } else {
-        println!("Welcome to the Donut REPL!");
-        println!("Use command 'exit' to exit the prompt.");
-        println!();
+impl Repl {
+    fn new() -> Repl {
+        Repl {
+            input: String::new(),
+            command_history: Vec::new(),
+            last_eval: String::new(),
+            interpreter: Interpreter::new(),
+            outputs: Vec::new(),
+        }
     }
 
+    fn evaluate(&mut self) {
+        let input: String = self.input.drain(..).collect();
+        self.command_history.push(input.clone());
+        self.last_eval.clear();
+        self.last_eval
+            .push_str(format!("{:?}", self.interpreter.run(&input)).as_str());
+
+        self.outputs.append(&mut self.interpreter.get_output());
+    }
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let repl = Repl::new();
+    let res = run(&mut terminal, repl);
+
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
+
+    if let Err(err) = res {
+        println!("{:?}", err)
+    }
+
+    Ok(())
+}
+
+fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()> {
     loop {
-        print!("{}", PROMPT);
-        writer.flush().ok();
+        terminal.draw(|f| ui(f, &repl))?;
 
-        if let Some(Ok(ref line)) = std::io::stdin().lines().next() {
-            if is_exit(line) {
-                break;
+        if let Event::Key(key) = event::read()? {
+            match key.code {
+                KeyCode::Enter => {
+                    repl.evaluate();
+                }
+                KeyCode::Esc => {
+                    return Ok(());
+                }
+                KeyCode::Char(c) => {
+                    repl.input.push(c);
+                }
+                KeyCode::Backspace => {
+                    repl.input.pop();
+                }
+                _ => (),
             }
-
-            input += line;
-
-            if is_unfinished(line) {
-                // Remove the escape character
-                input.pop();
-                continue;
-            }
-
-            println!("{:?}", interpreter.run(&input));
-            input = String::default();
         }
     }
 }
 
-fn is_exit(line: &str) -> bool {
-    "exit".eq(line)
-}
+fn ui<B: Backend>(frame: &mut Frame<B>, repl: &Repl) {
+    let halves = Layout::default()
+        .direction(Direction::Horizontal)
+        .margin(0)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+        .split(frame.size());
 
-fn is_unfinished(line: &str) -> bool {
-    if let Some('\\') = line.chars().last() {
-        return true;
-    }
-    return false;
-}
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints(
+            [
+                Constraint::Length(2),
+                Constraint::Length(3),
+                Constraint::Ratio(2, 3),
+                Constraint::Length(2),
+            ]
+            .as_ref(),
+        )
+        .split(halves[0]);
 
-fn main() {
-    // Spawn thread with explicit stack size
-    let child = thread::Builder::new()
-        .stack_size(STACK_SIZE)
-        .spawn(run)
-        .unwrap();
+    let output_chunk = Layout::default()
+        .margin(1)
+        .constraints([Constraint::Percentage(100)].as_ref())
+        .split(halves[1]);
 
-    // Wait for thread to join
-    child.join().unwrap_or_default();
+    let evaluation_message = vec![
+        Span::raw("Press "),
+        Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(" to evaluate input, or "),
+        Span::styled("Shift+Enter", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(" to continue typing input on the next line."),
+    ];
+    let exit_message = vec![
+        Span::raw(" Press "),
+        Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(" to exit."),
+    ];
+    let text = Text::from(vec![
+        Spans::from(evaluation_message),
+        Spans::from(exit_message),
+    ]);
+    let help_message = Paragraph::new(text).wrap(tui::widgets::Wrap { trim: true });
+    frame.render_widget(help_message, chunks[0]);
+
+    let input = Paragraph::new(repl.input.as_ref())
+        .block(Block::default().borders(Borders::ALL).title("Input"));
+    frame.render_widget(input, chunks[1]);
+
+    frame.set_cursor(chunks[1].x + repl.input.width() as u16 + 1, chunks[1].y + 1);
+
+    let history: Vec<ListItem> = repl
+        .command_history
+        .iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let content = vec![Spans::from(Span::raw(format!("{}: {}", i, line)))];
+            ListItem::new(content)
+        })
+        .collect();
+    let history = List::new(history).block(Block::default().borders(Borders::ALL).title("History"));
+    frame.render_widget(history, chunks[2]);
+
+    let last_eval = Paragraph::new(repl.last_eval.as_ref())
+        .block(Block::default().borders(Borders::ALL).title("Returned"));
+    frame.render_widget(last_eval, chunks[3]);
+
+    let outputs: Vec<ListItem> = repl
+        .outputs
+        .iter()
+        .map(|line| {
+            let content = vec![Spans::from(Span::raw(line))];
+            ListItem::new(content)
+        })
+        .collect();
+    let outputs = List::new(outputs).block(Block::default().borders(Borders::ALL).title("Output"));
+    frame.render_widget(outputs, output_chunk[0]);
 }
