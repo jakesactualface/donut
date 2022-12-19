@@ -132,6 +132,28 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &Repl) {
         .constraints([Constraint::Percentage(100)].as_ref())
         .split(halves[1]);
 
+    frame.render_widget(build_message_widget(), chunks[0]);
+
+    frame.render_widget(build_paragraph_widget(&repl.input, "Input"), chunks[1]);
+    frame.set_cursor(chunks[1].x + repl.input.width() as u16 + 1, chunks[1].y + 1);
+
+    frame.render_widget(
+        build_list_widget(&repl.command_history, chunks[2].height - 2),
+        chunks[2],
+    );
+
+    frame.render_widget(
+        build_paragraph_widget(&repl.last_eval, "Returned"),
+        chunks[3],
+    );
+
+    frame.render_widget(
+        build_list_widget(&repl.outputs, output_chunk[0].height - 3),
+        output_chunk[0],
+    );
+}
+
+fn build_message_widget<'a>() -> Paragraph<'a> {
     let evaluation_message = vec![
         Span::raw("Press "),
         Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
@@ -148,39 +170,35 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &Repl) {
         Spans::from(evaluation_message),
         Spans::from(exit_message),
     ]);
-    let help_message = Paragraph::new(text).wrap(tui::widgets::Wrap { trim: true });
-    frame.render_widget(help_message, chunks[0]);
+    return Paragraph::new(text).wrap(tui::widgets::Wrap { trim: true });
+}
 
-    let input = Paragraph::new(repl.input.as_ref())
-        .block(Block::default().borders(Borders::ALL).title("Input"));
-    frame.render_widget(input, chunks[1]);
+fn build_paragraph_widget<'a>(input: &'a str, title: &'a str) -> Paragraph<'a> {
+    return Paragraph::new(input).block(Block::default().borders(Borders::ALL).title(title));
+}
 
-    frame.set_cursor(chunks[1].x + repl.input.width() as u16 + 1, chunks[1].y + 1);
-
-    let history: Vec<ListItem> = repl
-        .command_history
+fn build_list_widget<'a>(items: &'a Vec<String>, max_length: u16) -> List<'a> {
+    let max_length: usize = max_length.into();
+    let list: Vec<ListItem> = items
         .iter()
         .enumerate()
-        .map(|(i, line)| {
-            let content = vec![Spans::from(Span::raw(format!("{}: {}", i, line)))];
-            ListItem::new(content)
+        .map(|(i, text)| {
+            format!("{}: {}", i, text)
+                .lines()
+                .map(|l| l.to_owned())
+                .map(|l| Spans::from(l))
+                .collect::<Vec<Spans>>()
         })
+        .flat_map(|v| v.into_iter())
+        .map(|spans| ListItem::new(spans))
         .collect();
-    let history = List::new(history).block(Block::default().borders(Borders::ALL).title("History"));
-    frame.render_widget(history, chunks[2]);
 
-    let last_eval = Paragraph::new(repl.last_eval.as_ref())
-        .block(Block::default().borders(Borders::ALL).title("Returned"));
-    frame.render_widget(last_eval, chunks[3]);
-
-    let outputs: Vec<ListItem> = repl
-        .outputs
-        .iter()
-        .map(|line| {
-            let content = vec![Spans::from(Span::raw(line))];
-            ListItem::new(content)
-        })
-        .collect();
-    let outputs = List::new(outputs).block(Block::default().borders(Borders::ALL).title("Output"));
-    frame.render_widget(outputs, output_chunk[0]);
+    let start_index = if list.len() > max_length {
+        list.len() - max_length
+    } else {
+        0
+    };
+    let truncated_list: Vec<ListItem> = list.into_iter().skip(start_index).collect();
+    return List::new(truncated_list)
+        .block(Block::default().borders(Borders::ALL).title("History"));
 }
