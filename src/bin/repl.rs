@@ -3,7 +3,7 @@ use std::io;
 use unicode_width::UnicodeWidthStr;
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -20,6 +20,7 @@ use donut::app::interpreter::Interpreter;
 
 struct Repl {
     input: String,
+    partial: String,
     command_history: Vec<String>,
     last_eval: String,
     interpreter: Interpreter,
@@ -30,6 +31,7 @@ impl Repl {
     fn new() -> Repl {
         Repl {
             input: String::new(),
+            partial: String::new(),
             command_history: Vec::new(),
             last_eval: String::new(),
             interpreter: Interpreter::new(),
@@ -38,20 +40,28 @@ impl Repl {
     }
 
     fn evaluate(&mut self) {
-        let input: String = self.input.drain(..).collect();
+        let mut input: String = self.input.drain(..).collect();
         self.command_history.push(input.clone());
         self.last_eval.clear();
+        let full_command: String = self.partial.drain(..).chain(input.drain(..)).collect();
         self.last_eval
-            .push_str(format!("{:?}", self.interpreter.run(&input)).as_str());
+            .push_str(format!("{:?}", self.interpreter.run(&full_command)).as_str());
 
         self.outputs.append(&mut self.interpreter.get_output());
+    }
+
+    fn push_unevaluated(&mut self) {
+        self.partial
+            .push_str(&self.input.drain(..).collect::<String>());
+        self.command_history.push(self.partial.clone());
+        self.last_eval.clear();
     }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -59,11 +69,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let res = run(&mut terminal, repl);
 
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen,)?;
     terminal.show_cursor()?;
 
     if let Err(err) = res {
@@ -78,17 +84,20 @@ fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()>
         terminal.draw(|f| ui(f, &repl))?;
 
         if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Enter => {
+            match (key.code, key.modifiers) {
+                (KeyCode::Enter, KeyModifiers::NONE) => {
                     repl.evaluate();
                 }
-                KeyCode::Esc => {
+                (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
+                    repl.push_unevaluated();
+                }
+                (KeyCode::Esc, _) => {
                     return Ok(());
                 }
-                KeyCode::Char(c) => {
+                (KeyCode::Char(c), _) => {
                     repl.input.push(c);
                 }
-                KeyCode::Backspace => {
+                (KeyCode::Backspace, _) => {
                     repl.input.pop();
                 }
                 _ => (),
@@ -127,7 +136,7 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &Repl) {
         Span::raw("Press "),
         Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
         Span::raw(" to evaluate input, or "),
-        Span::styled("Shift+Enter", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled("Ctrl+n", Style::default().add_modifier(Modifier::BOLD)),
         Span::raw(" to continue typing input on the next line."),
     ];
     let exit_message = vec![
