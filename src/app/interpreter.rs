@@ -31,7 +31,7 @@ impl Interpreter {
         let mut program = parser.parse_program();
 
         if !parser.errors.is_empty() {
-            panic!("Errors encountered: {:#?}", parser.errors);
+            return Object::Error(format!("Errors encountered: {:#?}", parser.errors));
         }
 
         define_macros(&mut program, self.macro_env.clone());

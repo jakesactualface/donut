@@ -151,7 +151,7 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
         Expression::Macro {
             parameters: _parameters,
             body: _body,
-        } => panic!("Cannot evaluate unexpanded macro!"),
+        } => Error(String::from("Cannot evaluate unexpanded macro!")),
     }
 }
 
@@ -326,7 +326,7 @@ fn eval_short_circuit_expression(
                 Error(_) => evaluated_left,
                 Boolean(false) => evaluated_left,
                 Boolean(true) => eval(right, env.clone()),
-                _ => panic!("Expected boolean expression!"),
+                _ => Error(String::from("Expected boolean expression!")),
             };
         }
         Token::Or => {
@@ -335,10 +335,10 @@ fn eval_short_circuit_expression(
                 Error(_) => evaluated_left,
                 Boolean(true) => evaluated_left,
                 Boolean(false) => eval(right, env.clone()),
-                _ => panic!("Expected boolean expression!"),
+                _ => Error(String::from("Expected boolean expression!")),
             };
         }
-        _ => panic!("Expected boolean operand!"),
+        _ => Error(String::from("Expected boolean operand!")),
     }
 }
 
@@ -403,7 +403,7 @@ fn eval_call_expression(
 
     if Builtin(String::from("quote")) == evaluated {
         if arguments.len() != 1 {
-            panic!("Expected single argument for Quote!");
+            return Error(String::from("Expected single argument for Quote!"));
         }
         return Quote(eval_unquoted(
             arguments.get(0).unwrap().clone(),
@@ -437,7 +437,7 @@ fn eval_call_expression(
         for (arg, param) in zip(evaluated_arguments, inner_params) {
             match param {
                 Expression::Identifier { name } => extended_env.set(name, arg),
-                _ => panic!("Expected identifier!"),
+                _ => return Error(String::from("Expected identifier!")),
             };
         }
         return match eval(inner_body, Rc::new(RefCell::new(extended_env))) {
@@ -484,14 +484,66 @@ fn eval_mutation_expression(
         return evaluated;
     }
 
-    let target_name: String;
-    if let Expression::Identifier { name } = target {
-        target_name = name;
-    } else {
-        panic!("Expected identifier!");
-    }
+    match target {
+        Expression::Identifier { name } => {
+            return env.borrow_mut().reassign(name, evaluated.clone());
+        }
+        Expression::Index { value, index } => {
+            let value_name: String;
+            if let Expression::Identifier { name } = *value {
+                value_name = name;
+            } else {
+                return Error(String::from("Cannot mutate literal!"));
+            }
 
-    return env.borrow_mut().reassign(target_name, evaluated.clone());
+            let mut borrowed_env = env.borrow_mut();
+            let retrieved_value = borrowed_env.store.get_mut(&value_name);
+            if retrieved_value.is_none() {
+                return Error(String::from("Mutation target is not defined!"));
+            }
+
+            let evaluated_index = eval(*index, env.clone());
+
+            return match (retrieved_value.unwrap(), evaluated_index) {
+                (Error(x), _) => Error(x.clone()),
+                (_, Error(index)) => Error(index),
+                (Array(array), Integer(index)) => {
+                    if index as usize >= array.len() {
+                        return Error(format!(
+                            "index out of bounds! Arrays are zero-indexed. Given: {}, Length: {}",
+                            index,
+                            array.len()
+                        ));
+                    }
+                    array.push(evaluated.clone());
+                    array.swap_remove(index as usize);
+                    return evaluated;
+                }
+                (Hash(map), key) => {
+                    map.insert(key, evaluated.clone());
+                    return evaluated;
+                }
+                (Object::String(string), Integer(index)) => {
+                    if let Object::String(mut new_letter) = evaluated {
+                        new_letter.truncate(1);
+                        string
+                            .replace_range(index as usize..index as usize + 1, new_letter.as_str());
+                        return Object::String(string.to_string());
+                    } else {
+                        return Error(format!(
+                            "Cannot insert non-string value into string: {evaluated:?}"
+                        ));
+                    }
+                }
+                (t, i) => Error(format!(
+                    "Target {t:?} does not support mutation with index {i:?}"
+                )),
+            };
+        }
+        t => {
+            return Error(format!("Mutation target not supported: {t:?}"));
+        }
+    };
 }
 
 #[cfg(test)]
@@ -829,6 +881,21 @@ mod tests {
             (
                 "mut a = 5;",
                 Error(String::from("No previous declaration for identifier: a")),
+            ),
+            (
+                "let a = [1, 2, 3]; mut a[1] = 4; a;",
+                Array(vec![Integer(1), Integer(4), Integer(3)]),
+            ),
+            (
+                "let a = {\"a\": 1, \"b\": 2}; mut a[\"a\"] = 4; a;",
+                Hash(HashMap::from([
+                    (Object::String(String::from("a")), Integer(4)),
+                    (Object::String(String::from("b")), Integer(2)),
+                ])),
+            ),
+            (
+                "let a = \"Hello\"; mut a[0] = \"M\"; a;",
+                Object::String(String::from("Mello")),
             ),
         ];
         for (scenario, expected) in scenarios.into_iter() {

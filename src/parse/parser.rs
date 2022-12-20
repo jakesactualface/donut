@@ -92,10 +92,15 @@ impl<'a> Parser<'a> {
     }
 
     fn peek_error(&mut self, token: Token) {
+        let peeked = self.lexer.peek();
+        if peeked.is_none() {
+            self.errors.push(String::from("Expected additional token!"));
+            return;
+        }
         self.errors.push(format!(
             "Expected next token to be {:?}, got {:?} instead",
             token,
-            self.lexer.peek().unwrap()
+            peeked.unwrap()
         ));
     }
 
@@ -315,16 +320,27 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_mutate_expression(&mut self) -> Option<Expression> {
-        let target_name: String;
-
-        if let Some(Token::Identifier(name)) = self.lexer.peek() {
-            target_name = name.clone();
-        } else {
-            self.peek_error(Token::Identifier(String::default()));
-            return None;
-        }
+        let target: Expression;
 
         self.next();
+        match self.parse_expression(Precedence::Prefix) {
+            Some(Expression::Identifier { name }) => {
+                target = Expression::Identifier { name };
+            }
+            Some(Expression::Index { value, index }) => {
+                target = Expression::Index { value, index };
+            }
+            Some(token) => {
+                self.errors
+                    .push(format!("Mutation not supported for token {token:?}"));
+                return None;
+            }
+            None => {
+                self.errors.push(format!("Expected mutation target!"));
+                return None;
+            }
+        }
+
         if !self.expect_peek(Token::Assignment) {
             return None;
         }
@@ -332,7 +348,7 @@ impl<'a> Parser<'a> {
         self.next();
         let value = self.parse_expression(Precedence::Lowest).unwrap();
         Some(Expression::Mutation {
-            target: Box::new(Expression::Identifier { name: target_name }),
+            target: Box::new(target),
             value: Box::new(value),
         })
     }
@@ -405,7 +421,11 @@ impl<'a> Parser<'a> {
             return None;
         }
         self.next();
-        let condition = self.parse_expression(Precedence::Lowest).unwrap();
+        let condition = self.parse_expression(Precedence::Lowest);
+
+        if condition.is_none() {
+            return None;
+        }
 
         if !self.expect_peek(Token::RParen) {
             return None;
@@ -413,7 +433,11 @@ impl<'a> Parser<'a> {
         if !self.expect_peek(Token::LBrace) {
             return None;
         }
-        let consequence = self.parse_block_statement().unwrap();
+        let consequence = self.parse_block_statement();
+
+        if consequence.is_none() {
+            return None;
+        }
 
         let mut alternative = None;
         if let Some(Token::Else) = self.lexer.peek() {
@@ -421,12 +445,16 @@ impl<'a> Parser<'a> {
             if !self.expect_peek(Token::LBrace) {
                 return None;
             }
-            alternative = Some(Box::new(self.parse_block_statement().unwrap()));
+            if let Some(statement) = self.parse_block_statement() {
+                alternative = Some(Box::new(statement));
+            } else {
+                return None;
+            }
         }
 
         return Some(Expression::IfExpression {
-            condition: Box::new(condition),
-            consequence: Box::new(consequence),
+            condition: Box::new(condition.unwrap()),
+            consequence: Box::new(consequence.unwrap()),
             alternative,
         });
     }
@@ -436,7 +464,11 @@ impl<'a> Parser<'a> {
             return None;
         }
         self.next();
-        let condition = self.parse_expression(Precedence::Lowest).unwrap();
+        let condition = self.parse_expression(Precedence::Lowest);
+
+        if condition.is_none() {
+            return None;
+        }
 
         if !self.expect_peek(Token::RParen) {
             return None;
@@ -444,11 +476,15 @@ impl<'a> Parser<'a> {
         if !self.expect_peek(Token::LBrace) {
             return None;
         }
-        let body = self.parse_block_statement().unwrap();
+        let body = self.parse_block_statement();
+
+        if body.is_none() {
+            return None;
+        }
 
         return Some(Expression::WhileExpression {
-            condition: Box::new(condition),
-            body: Box::new(body),
+            condition: Box::new(condition.unwrap()),
+            body: Box::new(body.unwrap()),
         });
     }
 
