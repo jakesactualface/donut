@@ -207,6 +207,16 @@ fn eval_index_expression(
             }
             return NULL;
         }
+        (Object::String(string), Integer(index)) => {
+            if let Some(object) = string.chars().nth(index as usize) {
+                return Object::String(String::from(object));
+            }
+            return Error(format!(
+                "index out of bounds! Arrays are zero-indexed. Given: {}, Length: {}",
+                index,
+                string.len()
+            ));
+        }
         (collection, Integer(_)) => Error(format!(
             "index operator not implemented for: {:?}",
             collection
@@ -1012,6 +1022,17 @@ mod tests {
             (
                 r#"{fn(x) { x }: "Monkey"}[fn(x) { x }];"#,
                 Object::String(String::from("Monkey")),
+            ),
+            (
+                "let myString = \"Hello World!\"; myString[4]",
+                Object::String(String::from("o")),
+            ),
+            ("\"Hello World!\"[0]", Object::String(String::from("H"))),
+            (
+                "\"Hello World!\"[20]",
+                Error(String::from(
+                    "index out of bounds! Arrays are zero-indexed. Given: 20, Length: 12",
+                )),
             ),
         ];
         for (scenario, expected) in scenarios.into_iter() {
