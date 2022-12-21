@@ -22,6 +22,7 @@ struct Repl {
     input: String,
     partial: String,
     command_history: Vec<String>,
+    command_eval_index: usize,
     last_eval: String,
     interpreter: Interpreter,
     outputs: Vec<String>,
@@ -33,6 +34,7 @@ impl Repl {
             input: String::new(),
             partial: String::new(),
             command_history: Vec::new(),
+            command_eval_index: 0,
             last_eval: String::new(),
             interpreter: Interpreter::new(),
             outputs: Vec::new(),
@@ -42,6 +44,7 @@ impl Repl {
     fn evaluate(&mut self) {
         let mut input: String = self.input.drain(..).collect();
         self.command_history.push(input.clone());
+        self.command_eval_index = self.command_history.len();
         self.last_eval.clear();
         let full_command: String = self.partial.drain(..).chain(input.drain(..)).collect();
         self.last_eval
@@ -51,9 +54,21 @@ impl Repl {
     }
 
     fn push_unevaluated(&mut self) {
-        self.partial
-            .push_str(&self.input.drain(..).collect::<String>());
-        self.command_history.push(self.partial.clone());
+        let additions = self.input.drain(..).collect::<String>();
+        self.partial.push_str(&additions);
+        self.command_history.push(additions);
+        self.last_eval.clear();
+    }
+
+    fn pop_unevaluated(&mut self) {
+        if self.partial.is_empty() {
+            return;
+        }
+        if let Some(last_partial) = self.command_history.pop() {
+            self.partial
+                .truncate(self.partial.len() - last_partial.len());
+            self.input = last_partial;
+        }
         self.last_eval.clear();
     }
 }
@@ -90,6 +105,9 @@ fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()>
                 }
                 (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
                     repl.push_unevaluated();
+                }
+                (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+                    repl.pop_unevaluated();
                 }
                 (KeyCode::Esc, _) => {
                     return Ok(());
@@ -138,7 +156,11 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &Repl) {
     frame.set_cursor(chunks[1].x + repl.input.width() as u16 + 1, chunks[1].y + 1);
 
     frame.render_widget(
-        build_list_widget(&repl.command_history, chunks[2].height - 2),
+        build_list_widget(
+            &repl.command_history,
+            chunks[2].height - 2,
+            Some(repl.command_eval_index),
+        ),
         chunks[2],
     );
 
@@ -148,7 +170,7 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &Repl) {
     );
 
     frame.render_widget(
-        build_list_widget(&repl.outputs, output_chunk[0].height - 3),
+        build_list_widget(&repl.outputs, output_chunk[0].height - 3, None),
         output_chunk[0],
     );
 }
@@ -177,9 +199,13 @@ fn build_paragraph_widget<'a>(input: &'a str, title: &'a str) -> Paragraph<'a> {
     return Paragraph::new(input).block(Block::default().borders(Borders::ALL).title(title));
 }
 
-fn build_list_widget<'a>(items: &'a Vec<String>, max_length: u16) -> List<'a> {
+fn build_list_widget<'a>(
+    items: &'a Vec<String>,
+    max_length: u16,
+    separator_index: Option<usize>,
+) -> List<'a> {
     let max_length: usize = max_length.into();
-    let list: Vec<ListItem> = items
+    let mut list: Vec<ListItem> = items
         .iter()
         .enumerate()
         .map(|(i, text)| {
@@ -192,6 +218,10 @@ fn build_list_widget<'a>(items: &'a Vec<String>, max_length: u16) -> List<'a> {
         .flat_map(|v| v.into_iter())
         .map(|spans| ListItem::new(spans))
         .collect();
+
+    if let Some(index) = separator_index {
+        list.insert(index, ListItem::new(tui::symbols::line::HORIZONTAL));
+    }
 
     let start_index = if list.len() > max_length {
         list.len() - max_length
