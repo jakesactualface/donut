@@ -1,5 +1,6 @@
-use std::error::Error;
-use std::io;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::{error::Error, io};
 use unicode_width::UnicodeWidthStr;
 
 use crossterm::{
@@ -71,6 +72,21 @@ impl Repl {
         }
         self.last_eval.clear();
     }
+
+    fn evaluate_file(&mut self) {
+        if self.input.is_empty() {
+            return;
+        }
+        let filename = self.input.drain(..).collect::<String>();
+        if let Ok(file) = File::open(filename.clone()) {
+            for line in BufReader::new(file).lines() {
+                self.input = line.ok().unwrap_or_default();
+                self.push_unevaluated();
+            }
+        } else {
+            self.last_eval = format!("Error: file not found: {filename}");
+        }
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -108,6 +124,9 @@ fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()>
                 }
                 (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
                     repl.pop_unevaluated();
+                }
+                (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
+                    repl.evaluate_file();
                 }
                 (KeyCode::Esc, _) => {
                     return Ok(());
