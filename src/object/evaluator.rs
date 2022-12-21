@@ -500,13 +500,13 @@ fn eval_mutation_expression(
                 return Error(String::from("Cannot mutate literal!"));
             }
 
+            let evaluated_index = eval(*index, env.clone());
+
             let mut borrowed_env = env.borrow_mut();
             let retrieved_value = borrowed_env.store.get_mut(&value_name);
             if retrieved_value.is_none() {
                 return Error(String::from("Mutation target is not defined!"));
             }
-
-            let evaluated_index = eval(*index, env.clone());
 
             return match (retrieved_value.unwrap(), evaluated_index) {
                 (Error(x), _) => Error(x.clone()),
