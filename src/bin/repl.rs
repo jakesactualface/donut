@@ -215,7 +215,9 @@ fn build_message_widget<'a>() -> Paragraph<'a> {
 }
 
 fn build_paragraph_widget<'a>(input: &'a str, title: &'a str) -> Paragraph<'a> {
-    return Paragraph::new(input).block(Block::default().borders(Borders::ALL).title(title));
+    return Paragraph::new(input)
+        .block(Block::default().borders(Borders::ALL).title(title))
+        .wrap(tui::widgets::Wrap { trim: true });
 }
 
 fn build_list_widget<'a>(
