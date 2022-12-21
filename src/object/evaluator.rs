@@ -165,6 +165,10 @@ fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, env: Rc<RefCell<Environment>
             }) => {
                 if let Expression::Identifier { name } = *function {
                     if name == "unquote" {
+                        if arguments.len() != 1 {
+                            return Error(String::from("Expected single argument for Unquote!"))
+                                .to_node();
+                        }
                         let arg = arguments.get(0).unwrap().clone();
                         return eval(arg, e).to_node();
                     }

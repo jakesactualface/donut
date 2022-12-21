@@ -140,7 +140,13 @@ impl<'a> Parser<'a> {
         }
 
         self.next();
-        let value = self.parse_expression(Precedence::Lowest).unwrap();
+        let value = self.parse_expression(Precedence::Lowest);
+
+        if value.is_none() {
+            self.errors
+                .push(format!("Expected assignment value for name: {name}"));
+            return None;
+        }
 
         if Some(&Token::Semicolon) == self.lexer.peek() {
             self.next();
@@ -148,19 +154,26 @@ impl<'a> Parser<'a> {
 
         Some(Statement::Let {
             name: name.clone(),
-            value,
+            value: value.unwrap(),
         })
     }
 
     fn parse_return_statement(&mut self) -> Option<Statement> {
         self.next();
-        let value = self.parse_expression(Precedence::Lowest).unwrap();
+        let value = self.parse_expression(Precedence::Lowest);
+
+        if value.is_none() {
+            self.errors.push(String::from("Expected return value!"));
+            return None;
+        }
 
         if Some(&Token::Semicolon) == self.lexer.peek() {
             self.next();
         }
 
-        Some(Statement::Return { value })
+        Some(Statement::Return {
+            value: value.unwrap(),
+        })
     }
 
     fn parse_expression_statement(&mut self) -> Option<Statement> {
@@ -204,6 +217,11 @@ impl<'a> Parser<'a> {
             match self.lexer.peek() {
                 Some(Token::Semicolon) => break,
                 Some(token) => {
+                    if expression.is_none() {
+                        self.errors.push(String::from("Expected expression!"));
+                        return None;
+                    }
+
                     if precedence >= token.precedence().clone() {
                         break;
                     }
@@ -267,15 +285,24 @@ impl<'a> Parser<'a> {
 
         while Some(&Token::RBrace) != self.lexer.peek() {
             self.next();
-            let key = self.parse_expression(Precedence::Lowest).unwrap();
+            let key = self.parse_expression(Precedence::Lowest);
+            if key.is_none() {
+                self.errors.push(String::from("Expected hash key!"));
+                return None;
+            }
 
             if !self.expect_peek(Token::Colon) {
                 return None;
             }
 
             self.next();
-            let value = self.parse_expression(Precedence::Lowest).unwrap();
-            pairs.push((key, value));
+            let value = self.parse_expression(Precedence::Lowest);
+            if value.is_none() {
+                self.errors
+                    .push(format!("Expected value for hash key: {:?}", key.unwrap()));
+                return None;
+            }
+            pairs.push((key.unwrap(), value.unwrap()));
 
             if Some(&Token::RBrace) != self.lexer.peek() && !self.expect_peek(Token::Comma) {
                 return None;
@@ -298,9 +325,14 @@ impl<'a> Parser<'a> {
         if !self.expect_peek(Token::LBrace) {
             return None;
         }
+        let block = self.parse_block_statement();
+        if block.is_none() {
+            self.errors.push(String::from("Expected function body!"));
+            return None;
+        }
         return Some(Expression::Function {
             parameters,
-            body: Box::new(self.parse_block_statement().unwrap()),
+            body: Box::new(block.unwrap()),
         });
     }
 
@@ -313,9 +345,14 @@ impl<'a> Parser<'a> {
         if !self.expect_peek(Token::LBrace) {
             return None;
         }
+        let block = self.parse_block_statement();
+        if block.is_none() {
+            self.errors.push(String::from("Expected macro body!"));
+            return None;
+        }
         return Some(Expression::Macro {
             parameters,
-            body: Box::new(self.parse_block_statement().unwrap()),
+            body: Box::new(block.unwrap()),
         });
     }
 
@@ -346,10 +383,15 @@ impl<'a> Parser<'a> {
         }
 
         self.next();
-        let value = self.parse_expression(Precedence::Lowest).unwrap();
+        let value = self.parse_expression(Precedence::Lowest);
+        if value.is_none() {
+            self.errors
+                .push(String::from("Expected value in mutation statement!"));
+            return None;
+        }
         Some(Expression::Mutation {
             target: Box::new(target),
-            value: Box::new(value),
+            value: Box::new(value.unwrap()),
         })
     }
 
@@ -370,12 +412,23 @@ impl<'a> Parser<'a> {
             }
         };
 
-        parameters.push(current_to_identifier(&self.current).unwrap());
+        let first_param = current_to_identifier(&self.current);
+        if first_param.is_none() {
+            self.errors.push(String::from("Expected parameter list!"));
+            return parameters;
+        }
+        parameters.push(first_param.unwrap());
 
         while Some(&Token::Comma) == self.lexer.peek() {
             self.next();
             self.next();
-            parameters.push(current_to_identifier(&self.current).unwrap());
+            let next_arg = current_to_identifier(&self.current);
+            if next_arg.is_none() {
+                self.errors
+                    .push(String::from("Expected parameter after comma!"));
+                return parameters;
+            }
+            parameters.push(next_arg.unwrap());
         }
 
         if !self.expect_peek(Token::RParen) {
@@ -568,12 +621,23 @@ impl<'a> Parser<'a> {
             return arguments;
         }
 
-        arguments.push(self.parse_expression(Precedence::Lowest).unwrap());
+        let first_arg = self.parse_expression(Precedence::Lowest);
+        if first_arg.is_none() {
+            self.errors.push(String::from("Expected argument list!"));
+            return arguments;
+        }
+        arguments.push(first_arg.unwrap());
 
         while Some(&Token::Comma) == self.lexer.peek() {
             self.next();
             self.next();
-            arguments.push(self.parse_expression(Precedence::Lowest).unwrap());
+            let list_item = self.parse_expression(Precedence::Lowest);
+            if list_item.is_none() {
+                self.errors
+                    .push(String::from("Missing expression after comma!"));
+                return arguments;
+            }
+            arguments.push(list_item.unwrap());
         }
 
         if !self.expect_peek(terminator) {
