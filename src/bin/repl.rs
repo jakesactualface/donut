@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::{error::Error, io};
+use tui::widgets::ListState;
 use unicode_width::UnicodeWidthStr;
 
 use crossterm::{
@@ -19,56 +20,159 @@ use tui::{
 
 use donut::app::interpreter::Interpreter;
 
+struct HistoryList {
+    state: ListState,
+    items: Vec<String>,
+    eval_index: usize,
+}
+
+impl HistoryList {
+    fn new() -> HistoryList {
+        HistoryList {
+            state: ListState::default(),
+            items: Vec::new(),
+            eval_index: 0,
+        }
+    }
+
+    fn get_new_lines_to_cursor(&mut self) -> Vec<String> {
+        let stop_index: usize;
+        if let Some(selected) = self.state.selected() {
+            stop_index = selected + 1;
+        } else {
+            stop_index = self.items.len();
+        }
+        let mut returned_items: Vec<String> = Vec::new();
+        if let Some(range) = self.items.get(self.eval_index..stop_index) {
+            for item in range {
+                returned_items.push(item.clone());
+            }
+        }
+        self.eval_index = stop_index;
+        return returned_items;
+    }
+
+    fn push(&mut self, item: String) {
+        if let None = self.state.selected() {
+            self.items.push(item);
+            self.state.select(Some(self.items.len() - 1));
+            return;
+        }
+        let selected = self.state.selected().unwrap();
+        if selected >= self.eval_index.saturating_sub(1) {
+            self.items.insert(selected + 1, item);
+            self.state.select(Some(selected + 1));
+        } else {
+            self.items.push(item);
+            self.state.select(Some(self.items.len() - 1));
+        }
+    }
+
+    fn pop(&mut self) -> Option<String> {
+        if self.eval_index >= self.items.len() - 1 {
+            return None;
+        }
+        if let None = self.state.selected() {
+            return self.items.pop();
+        }
+        let selected = self.state.selected().unwrap();
+        if selected > self.eval_index.saturating_sub(1) {
+            return Some(self.items.remove(selected));
+        }
+        return None;
+    }
+
+    fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    fn get_selected(&mut self) -> Option<&String> {
+        if let Some(selected) = self.state.selected() {
+            return self.items.get(selected);
+        }
+        return None;
+    }
+}
+
 struct Repl {
     input: String,
-    partial: String,
-    command_history: Vec<String>,
-    command_eval_index: usize,
+    command_history: HistoryList,
     last_eval: String,
     interpreter: Interpreter,
-    outputs: Vec<String>,
+    outputs: HistoryList,
 }
 
 impl Repl {
     fn new() -> Repl {
         Repl {
             input: String::new(),
-            partial: String::new(),
-            command_history: Vec::new(),
-            command_eval_index: 0,
+            command_history: HistoryList::new(),
             last_eval: String::new(),
             interpreter: Interpreter::new(),
-            outputs: Vec::new(),
+            outputs: HistoryList::new(),
         }
     }
 
     fn evaluate(&mut self) {
-        let mut input: String = self.input.drain(..).collect();
-        self.command_history.push(input.clone());
-        self.command_eval_index = self.command_history.len();
+        let input: String = self.input.drain(..).collect();
+
+        if input.len() > 0 {
+            self.command_history.push(input);
+        }
+
+        let commands_to_evaluate = self.command_history.get_new_lines_to_cursor();
+        if commands_to_evaluate.len() == 0 {
+            return;
+        }
+
         self.last_eval.clear();
-        let full_command: String = self.partial.drain(..).chain(input.drain(..)).collect();
+        let full_command: String = commands_to_evaluate
+            .into_iter()
+            .map(|s| s.clone())
+            .collect::<Vec<String>>()
+            .join(" ");
+
         self.last_eval
             .push_str(format!("{:?}", self.interpreter.run(&full_command)).as_str());
 
-        self.outputs.append(&mut self.interpreter.get_output());
+        for line in self.interpreter.get_output() {
+            self.outputs.push(line);
+        }
     }
 
     fn push_unevaluated(&mut self) {
         let additions = self.input.drain(..).collect::<String>();
-        self.partial.push_str(&additions);
         self.command_history.push(additions);
         self.last_eval.clear();
     }
 
     fn pop_unevaluated(&mut self) {
-        if self.partial.is_empty() {
-            return;
-        }
-        if let Some(last_partial) = self.command_history.pop() {
-            self.partial
-                .truncate(self.partial.len() - last_partial.len());
-            self.input = last_partial;
+        if let Some(popped) = self.command_history.pop() {
+            self.input = popped;
         }
         self.last_eval.clear();
     }
@@ -112,21 +216,34 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()> {
     loop {
-        terminal.draw(|f| ui(f, &repl))?;
+        terminal.draw(|f| ui(f, &mut repl))?;
 
         if let Event::Key(key) = event::read()? {
             match (key.code, key.modifiers) {
                 (KeyCode::Enter, KeyModifiers::NONE) => {
-                    repl.evaluate();
-                }
-                (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
                     repl.push_unevaluated();
                 }
-                (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+                (KeyCode::Char('e'), KeyModifiers::CONTROL) => {
+                    repl.evaluate();
+                }
+                (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+                    if let Some(command) = repl.command_history.get_selected() {
+                        repl.input = command.clone();
+                    } else {
+                        repl.input.clear();
+                    }
+                }
+                (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
                     repl.pop_unevaluated();
                 }
                 (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
                     repl.evaluate_file();
+                }
+                (KeyCode::Up, KeyModifiers::NONE) => {
+                    repl.command_history.previous();
+                }
+                (KeyCode::Down, KeyModifiers::NONE) => {
+                    repl.command_history.next();
                 }
                 (KeyCode::Esc, _) => {
                     return Ok(());
@@ -143,7 +260,7 @@ fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()>
     }
 }
 
-fn ui<B: Backend>(frame: &mut Frame<B>, repl: &Repl) {
+fn ui<B: Backend>(frame: &mut Frame<B>, repl: &mut Repl) {
     let halves = Layout::default()
         .direction(Direction::Horizontal)
         .margin(0)
@@ -174,13 +291,14 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &Repl) {
     frame.render_widget(build_paragraph_widget(&repl.input, "Input"), chunks[1]);
     frame.set_cursor(chunks[1].x + repl.input.width() as u16 + 1, chunks[1].y + 1);
 
-    frame.render_widget(
+    frame.render_stateful_widget(
         build_list_widget(
-            &repl.command_history,
-            chunks[2].height - 2,
-            Some(repl.command_eval_index),
+            &repl.command_history.items,
+            Some(repl.command_history.eval_index),
+            ">> ",
         ),
         chunks[2],
+        &mut repl.command_history.state,
     );
 
     frame.render_widget(
@@ -188,9 +306,10 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &Repl) {
         chunks[3],
     );
 
-    frame.render_widget(
-        build_list_widget(&repl.outputs, output_chunk[0].height - 3, None),
+    frame.render_stateful_widget(
+        build_list_widget(&repl.outputs.items, None, ""),
         output_chunk[0],
+        &mut repl.outputs.state,
     );
 }
 
@@ -198,9 +317,9 @@ fn build_message_widget<'a>() -> Paragraph<'a> {
     let evaluation_message = vec![
         Span::raw("Press "),
         Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(" to evaluate input, or "),
-        Span::styled("Ctrl+n", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(" to continue typing input on the next line."),
+        Span::raw(" to continue typing input on the next line, or "),
+        Span::styled("Ctrl+e", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(" to begin evaluation."),
     ];
     let exit_message = vec![
         Span::raw(" Press "),
@@ -222,34 +341,38 @@ fn build_paragraph_widget<'a>(input: &'a str, title: &'a str) -> Paragraph<'a> {
 
 fn build_list_widget<'a>(
     items: &'a Vec<String>,
-    max_length: u16,
     separator_index: Option<usize>,
+    select_flag: &'a str,
 ) -> List<'a> {
-    let max_length: usize = max_length.into();
-    let mut list: Vec<ListItem> = items
+    let list: Vec<ListItem> = items
         .iter()
         .enumerate()
         .map(|(i, text)| {
-            format!("{}: {}", i, text)
+            format!("{}: {}", i + 1, text)
                 .lines()
                 .map(|l| l.to_owned())
                 .map(|l| Spans::from(l))
                 .collect::<Vec<Spans>>()
         })
         .flat_map(|v| v.into_iter())
-        .map(|spans| ListItem::new(spans))
+        .enumerate()
+        .map(|(i, spans)| {
+            if let None = separator_index {
+                return ListItem::new(spans);
+            }
+            if i < separator_index.unwrap() {
+                return ListItem::new(spans).style(Style {
+                    fg: None,
+                    bg: None,
+                    add_modifier: Modifier::DIM,
+                    sub_modifier: Modifier::empty(),
+                });
+            }
+            return ListItem::new(spans);
+        })
         .collect();
 
-    if let Some(index) = separator_index {
-        list.insert(index, ListItem::new(tui::symbols::line::HORIZONTAL));
-    }
-
-    let start_index = if list.len() > max_length {
-        list.len() - max_length
-    } else {
-        0
-    };
-    let truncated_list: Vec<ListItem> = list.into_iter().skip(start_index).collect();
-    return List::new(truncated_list)
-        .block(Block::default().borders(Borders::ALL).title("History"));
+    return List::new(list)
+        .block(Block::default().borders(Borders::ALL).title("History"))
+        .highlight_symbol(select_flag);
 }
