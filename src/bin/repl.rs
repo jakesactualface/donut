@@ -53,6 +53,11 @@ impl HistoryList {
     }
 
     fn push(&mut self, item: String) {
+        if self.items.len() == 0 {
+            self.items.push(item);
+            self.state.select(Some(0));
+            return;
+        }
         if let None = self.state.selected() {
             self.items.push(item);
             self.state.select(Some(self.items.len() - 1));
@@ -69,15 +74,25 @@ impl HistoryList {
     }
 
     fn pop(&mut self) -> Option<String> {
-        if self.eval_index >= self.items.len() - 1 {
+        if self.items.len() == 0 {
+            return None;
+        }
+        if self.eval_index >= self.items.len() {
             return None;
         }
         if let None = self.state.selected() {
             return self.items.pop();
         }
         let selected = self.state.selected().unwrap();
+        if self.eval_index == 0 {
+            let item = self.items.remove(selected);
+            self.state.select(Some(selected.saturating_sub(1)));
+            return Some(item);
+        }
         if selected > self.eval_index.saturating_sub(1) {
-            return Some(self.items.remove(selected));
+            let item = self.items.remove(selected);
+            self.state.select(Some(selected.saturating_sub(1)));
+            return Some(item);
         }
         return None;
     }
