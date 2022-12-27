@@ -212,7 +212,7 @@ impl Repl {
 fn main() -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, SetTitle("Donut"))?;
+    execute!(stdout, EnterAlternateScreen, SetTitle("Dough"))?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
