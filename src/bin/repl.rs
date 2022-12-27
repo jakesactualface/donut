@@ -1,3 +1,4 @@
+use crossterm::terminal::SetTitle;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::{error::Error, io};
@@ -211,7 +212,7 @@ impl Repl {
 fn main() -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, SetTitle("Donut"))?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -219,7 +220,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let res = run(&mut terminal, repl);
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen,)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
 
     if let Err(err) = res {
