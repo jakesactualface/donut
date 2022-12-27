@@ -105,6 +105,16 @@ impl Environment {
         return value;
     }
 
+    pub fn assign(&mut self, name: String, value: Object) -> Object {
+        if let Some(_) = self.store.get(&name) {
+            return Object::Error(format!(
+                "Declaration already exists in current context for identifier: {name}",
+            ));
+        }
+        self.store.insert(name, value.clone());
+        return value;
+    }
+
     pub fn reassign(&mut self, name: String, value: Object) -> Object {
         if let Some(_) = self.store.get(&name) {
             self.store.insert(name, value.clone());

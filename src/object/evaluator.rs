@@ -51,7 +51,7 @@ fn eval_statement(statement: Statement, env: Rc<RefCell<Environment>>) -> Object
             let evaluated = eval(value, env.clone());
             return match evaluated {
                 Error(_) => evaluated,
-                _ => env.borrow_mut().set(name, evaluated),
+                _ => env.borrow_mut().assign(name, evaluated),
             };
         }
         Statement::Return { value } => {
@@ -856,13 +856,19 @@ mod tests {
     #[test]
     fn let_statements() {
         let scenarios = vec![
-            ("let a = 5; a;", 5),
-            ("let a = 5 * 5; a;", 25),
-            ("let a = 5; let b = a; b;", 5),
-            ("let a = 5; let b = a; let c = a + b + 5; c;", 15),
+            ("let a = 5; a;", Integer(5)),
+            ("let a = 5 * 5; a;", Integer(25)),
+            ("let a = 5; let b = a; b;", Integer(5)),
+            ("let a = 5; let b = a; let c = a + b + 5; c;", Integer(15)),
+            (
+                "let a = 1; let a = 2;",
+                Error(String::from(
+                    "Declaration already exists in current context for identifier: a",
+                )),
+            ),
         ];
         for (scenario, expected) in scenarios.into_iter() {
-            assert_object_scenario(scenario, Integer(expected));
+            assert_object_scenario(scenario, expected);
         }
     }
 
