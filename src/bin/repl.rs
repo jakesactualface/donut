@@ -254,7 +254,7 @@ fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()>
                         repl.input.clear();
                     }
                 }
-                (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
+                (KeyCode::Char('x'), KeyModifiers::CONTROL) => {
                     repl.pop_unevaluated();
                 }
                 (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
