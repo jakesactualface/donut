@@ -11,6 +11,7 @@ use super::types::Object::{self, Error, Integer, Null};
 pub type BuiltinFunction = fn(&[Object]) -> Object;
 
 static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
+    "defined" => defined_builtin,
     "fileLines" => file_lines_builtin,
     "first" => first_builtin,
     "last" => last_builtin,
@@ -39,6 +40,11 @@ fn do_print(output: String) {
 
 pub fn get_output() -> Vec<String> {
     return OUTPUT.lock().unwrap().drain(..).collect();
+}
+
+fn defined_builtin(_objects: &[Object]) -> Object {
+    // Dummy implementation to support identifying calls to `defined`
+    return Null;
 }
 
 fn file_lines_builtin(objects: &[Object]) -> Object {

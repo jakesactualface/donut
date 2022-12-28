@@ -155,6 +155,29 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
     }
 }
 
+fn eval_defined(arguments: Vec<Expression>, env: Rc<RefCell<Environment>>) -> Object {
+    if arguments.len() != 1 {
+        return Error(String::from("Expected single argument for `defined`!"));
+    }
+    let argument = eval_expression(arguments.first().unwrap().clone(), env);
+    match argument {
+        Return(x) => Return(x),
+        Error(_) => Boolean(false),
+        Null => Boolean(false),
+        _ => Boolean(true),
+    }
+}
+
+fn eval_quote(arguments: Vec<Expression>, env: Rc<RefCell<Environment>>) -> Object {
+    if arguments.len() != 1 {
+        return Error(String::from("Expected single argument for `quote`!"));
+    }
+    return Quote(eval_unquoted(
+        arguments.get(0).unwrap().clone(),
+        env.clone(),
+    ));
+}
+
 fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, env: Rc<RefCell<Environment>>) -> T {
     let modifier: ModifierFunction;
     modifier = |n, e| -> Node {
@@ -405,14 +428,16 @@ fn eval_call_expression(
         return evaluated;
     }
 
-    if Builtin(String::from("quote")) == evaluated {
-        if arguments.len() != 1 {
-            return Error(String::from("Expected single argument for Quote!"));
+    if let Builtin(builtin_name) = &evaluated {
+        match builtin_name.as_str() {
+            "defined" => {
+                return eval_defined(arguments, env);
+            }
+            "quote" => {
+                return eval_quote(arguments, env);
+            }
+            _ => (),
         }
-        return Quote(eval_unquoted(
-            arguments.get(0).unwrap().clone(),
-            env.clone(),
-        ));
     }
 
     let mut evaluated_arguments: Vec<Object> = vec![];
@@ -425,7 +450,7 @@ fn eval_call_expression(
         evaluated_arguments.push(evaluated_argument);
     }
 
-    if let Builtin(name) = evaluated {
+    if let Builtin(name) = &evaluated {
         let function = get_builtin(&name);
         return function(evaluated_arguments.as_slice());
     }
@@ -1120,6 +1145,27 @@ mod tests {
     #[test]
     fn builtin_functions() {
         let scenarios = vec![(r#"len("")"#, Integer(0))];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn defined() {
+        let scenarios = vec![
+            ("let a = 1; defined(a)", Boolean(true)),
+            ("let a = 1; defined(b)", Boolean(false)),
+            ("let a = [1, 2, 3]; defined(a[0])", Boolean(true)),
+            ("let a = [1, 2, 3]; defined(a[5])", Boolean(false)),
+            (
+                "let a = {1: true, 2: 99, 3: \"test\"}; defined(a[3])",
+                Boolean(true),
+            ),
+            (
+                "let a = {1: true, 2: 99, 3: \"test\"}; defined(a[5])",
+                Boolean(false),
+            ),
+        ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_object_scenario(scenario, expected);
         }
