@@ -14,6 +14,7 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
     "defined" => defined_builtin,
     "fileLines" => file_lines_builtin,
     "first" => first_builtin,
+    "hasKey" => has_key_builtin,
     "last" => last_builtin,
     "len" => len_builtin,
     "push" => push_builtin,
@@ -106,6 +107,25 @@ fn first_builtin(objects: &[Object]) -> Object {
             elements.first().unwrap().clone()
         }
         x => Error(format!("Argument to `first` not supported: {:?}", x)),
+    };
+}
+
+fn has_key_builtin(objects: &[Object]) -> Object {
+    if objects.len() != 2 {
+        return Error(format!(
+            "Wrong number of arguments for `hasKey`. got:{}, want:2",
+            objects.len()
+        ));
+    }
+    let key = objects.get(1).unwrap();
+    return match &objects[0] {
+        Object::Hash(map) => {
+            if map.contains_key(key) {
+                return Object::Boolean(true);
+            }
+            return Object::Boolean(false);
+        }
+        x => Error(format!("Argument to `hasKey` not supported: {:?}", x)),
     };
 }
 
@@ -343,6 +363,36 @@ mod tests {
                 r#"first([])"#,
                 Error(String::from(
                     "Argument to `first` has no first element: Array([])",
+                )),
+            ),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn has_key() {
+        let scenarios = vec![
+            ("let a = {1: 2, 3: 4}; hasKey(a, 1)", Object::Boolean(true)),
+            ("let a = {1: 2, 3: 4}; hasKey(a, 9)", Object::Boolean(false)),
+            (
+                "let a = {true: 2, false: 4}; hasKey(a, false)",
+                Object::Boolean(true),
+            ),
+            (
+                "let a = {true: 2}; hasKey(a, false)",
+                Object::Boolean(false),
+            ),
+            (
+                "let a = {\"first\": 1}; hasKey(a, \"second\")",
+                Object::Boolean(false),
+            ),
+            ("let a = {}; hasKey(a, 1)", Object::Boolean(false)),
+            (
+                "let a = [1, 2]; hasKey(a, 0)",
+                Object::Error(String::from(
+                    "Argument to `hasKey` not supported: Array([Integer(1), Integer(2)])",
                 )),
             ),
         ];
