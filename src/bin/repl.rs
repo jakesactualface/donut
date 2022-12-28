@@ -193,6 +193,11 @@ impl Repl {
         self.last_eval.clear();
     }
 
+    fn delete_unevaluated(&mut self) {
+        self.command_history.pop();
+        self.last_eval.clear();
+    }
+
     fn evaluate_file(&mut self) {
         if self.input.is_empty() {
             return;
@@ -251,6 +256,9 @@ fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()>
                 }
                 (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
                     repl.pop_unevaluated();
+                }
+                (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+                    repl.delete_unevaluated();
                 }
                 (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
                     repl.evaluate_file();
