@@ -44,7 +44,7 @@ impl ToNode for Object {
                     .into_iter()
                     .map(|e| match e.to_node() {
                         Node::Expression(e) => e,
-                        _ => todo!(),
+                        _ => panic!("Expected expression node!"),
                     })
                     .collect();
                 return Node::Expression(Expression::Array {
@@ -56,7 +56,7 @@ impl ToNode for Object {
                     .into_iter()
                     .map(|(key, value)| match (key.to_node(), value.to_node()) {
                         (Node::Expression(k), Node::Expression(v)) => (k, v),
-                        _ => todo!(),
+                        _ => panic!("Expected expression node!"),
                     })
                     .collect();
                 return Node::Expression(Expression::Hash {

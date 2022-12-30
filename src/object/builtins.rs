@@ -248,7 +248,7 @@ fn sort_builtin(objects: &[Object]) -> Object {
                     return Ordering::Greater;
                 }
             }
-            _ => todo!(),
+            _ => todo!("Not implemented for objects: {a:?}, {b:?}"),
         }
     };
     return match &objects[0] {
