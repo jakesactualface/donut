@@ -29,6 +29,14 @@ impl InputBox {
         }
     }
 
+    pub fn cursor_to_start(&mut self) {
+        self.cursor_position = 0;
+    }
+
+    pub fn cursor_to_end(&mut self) {
+        self.cursor_position = self.text.width();
+    }
+
     pub fn is_empty(&self) -> bool {
         self.text.is_empty()
     }
@@ -44,11 +52,15 @@ impl InputBox {
     }
 
     pub fn remove(&mut self) {
-        self.text.remove(self.cursor_position);
+        if self.cursor_position == 0 {
+            return;
+        }
+        self.text.remove(self.cursor_position - 1);
         self.cursor_position = self.cursor_position.saturating_sub(1);
     }
 
     pub fn clear(&mut self) -> String {
+        self.cursor_position = 0;
         self.text.drain(..).collect()
     }
 }

@@ -160,6 +160,12 @@ fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()>
                 (KeyCode::Right, KeyModifiers::NONE) => {
                     repl.input.move_cursor(1);
                 }
+                (KeyCode::Home, KeyModifiers::NONE) => {
+                    repl.input.cursor_to_start();
+                }
+                (KeyCode::End, KeyModifiers::NONE) => {
+                    repl.input.cursor_to_end();
+                }
                 (KeyCode::Esc, _) => {
                     return Ok(());
                 }
