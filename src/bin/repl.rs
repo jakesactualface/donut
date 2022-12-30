@@ -1,11 +1,10 @@
 use crossterm::terminal::SetTitle;
 use donut::ui::widget::{
-    build_list_widget, build_message_widget, build_paragraph_widget, HistoryList,
+    build_list_widget, build_message_widget, build_paragraph_widget, HistoryList, InputBox,
 };
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::{error::Error, io};
-use unicode_width::UnicodeWidthStr;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
@@ -21,7 +20,7 @@ use tui::{
 use donut::app::interpreter::Interpreter;
 
 struct Repl {
-    input: String,
+    input: InputBox,
     command_history: HistoryList,
     last_eval: String,
     interpreter: Interpreter,
@@ -31,7 +30,7 @@ struct Repl {
 impl Repl {
     fn new() -> Repl {
         Repl {
-            input: String::new(),
+            input: InputBox::new(),
             command_history: HistoryList::new(),
             last_eval: String::new(),
             interpreter: Interpreter::new(),
@@ -40,7 +39,7 @@ impl Repl {
     }
 
     fn evaluate(&mut self) {
-        let input: String = self.input.drain(..).collect();
+        let input = self.input.clear();
 
         if input.len() > 0 {
             self.command_history.push(input);
@@ -67,14 +66,14 @@ impl Repl {
     }
 
     fn push_unevaluated(&mut self) {
-        let additions = self.input.drain(..).collect::<String>();
+        let additions = self.input.clear();
         self.command_history.push(additions);
         self.last_eval.clear();
     }
 
     fn pop_unevaluated(&mut self) {
         if let Some(popped) = self.command_history.pop() {
-            self.input = popped;
+            self.input.set(popped);
         }
         self.last_eval.clear();
     }
@@ -88,10 +87,10 @@ impl Repl {
         if self.input.is_empty() {
             return;
         }
-        let filename = self.input.drain(..).collect::<String>();
+        let filename = self.input.clear();
         if let Ok(file) = File::open(filename.clone()) {
             for line in BufReader::new(file).lines() {
-                self.input = line.ok().unwrap_or_default();
+                self.input.set(line.ok().unwrap_or_default());
                 self.push_unevaluated();
             }
         } else {
@@ -135,7 +134,7 @@ fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()>
                 }
                 (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
                     if let Some(command) = repl.command_history.get_selected() {
-                        repl.input = command.clone();
+                        repl.input.set(command.clone());
                     } else {
                         repl.input.clear();
                     }
@@ -155,14 +154,20 @@ fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()>
                 (KeyCode::Down, KeyModifiers::NONE) => {
                     repl.command_history.next();
                 }
+                (KeyCode::Left, KeyModifiers::NONE) => {
+                    repl.input.move_cursor(-1);
+                }
+                (KeyCode::Right, KeyModifiers::NONE) => {
+                    repl.input.move_cursor(1);
+                }
                 (KeyCode::Esc, _) => {
                     return Ok(());
                 }
                 (KeyCode::Char(c), _) => {
-                    repl.input.push(c);
+                    repl.input.insert(c);
                 }
                 (KeyCode::Backspace, _) => {
-                    repl.input.pop();
+                    repl.input.remove();
                 }
                 _ => (),
             }
@@ -198,8 +203,11 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &mut Repl) {
 
     frame.render_widget(build_message_widget(), chunks[0]);
 
-    frame.render_widget(build_paragraph_widget(&repl.input, "Input"), chunks[1]);
-    frame.set_cursor(chunks[1].x + repl.input.width() as u16 + 1, chunks[1].y + 1);
+    frame.render_widget(build_paragraph_widget(&repl.input.text, "Input"), chunks[1]);
+    frame.set_cursor(
+        chunks[1].x + repl.input.cursor_position as u16 + 1,
+        chunks[1].y + 1,
+    );
 
     frame.render_stateful_widget(
         build_list_widget(

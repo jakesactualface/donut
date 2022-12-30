@@ -6,6 +6,53 @@ use tui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 
+use unicode_width::UnicodeWidthStr;
+
+pub struct InputBox {
+    pub text: String,
+    pub cursor_position: usize,
+}
+
+impl InputBox {
+    pub fn new() -> Self {
+        InputBox {
+            text: String::default(),
+            cursor_position: 0,
+        }
+    }
+
+    pub fn move_cursor(&mut self, diff: isize) {
+        self.cursor_position = self.cursor_position.saturating_add_signed(diff);
+        let max_cursor = self.text.width();
+        if self.cursor_position > max_cursor {
+            self.cursor_position = max_cursor;
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.text.is_empty()
+    }
+
+    pub fn set(&mut self, text: String) {
+        self.text = text;
+        self.cursor_position = self.text.width();
+    }
+
+    pub fn insert(&mut self, new_char: char) {
+        self.text.insert(self.cursor_position, new_char);
+        self.cursor_position = self.cursor_position.saturating_add(1);
+    }
+
+    pub fn remove(&mut self) {
+        self.text.remove(self.cursor_position);
+        self.cursor_position = self.cursor_position.saturating_sub(1);
+    }
+
+    pub fn clear(&mut self) -> String {
+        self.text.drain(..).collect()
+    }
+}
+
 pub struct HistoryList {
     pub state: ListState,
     pub items: Vec<String>,
