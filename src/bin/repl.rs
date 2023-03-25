@@ -261,13 +261,10 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &mut Repl) {
         &mut repl.outputs.state,
     );
 
-    match repl.active_popup {
-        Some(Popup::Help) => {
-            let popup_area = centered_rect(90, 90, frame.size());
-            frame.render_widget(Clear, popup_area);
-            frame.render_widget(build_help_widget(), popup_area)
-        }
-        None => (),
+    if let Some(Popup::Help) = repl.active_popup {
+        let popup_area = centered_rect(90, 90, frame.size());
+        frame.render_widget(Clear, popup_area);
+        frame.render_widget(build_help_widget(), popup_area)
     }
 }
 

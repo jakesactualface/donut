@@ -274,7 +274,9 @@ pub fn build_help_widget<'a>() -> Paragraph<'a> {
         vec![Span::raw("")],
     ];
     let text = Text::from(content.into_iter().map(Spans::from).collect::<Vec<Spans>>());
-    return Paragraph::new(text).block(block);
+    return Paragraph::new(text)
+        .wrap(tui::widgets::Wrap { trim: false })
+        .block(block);
 }
 
 pub fn build_message_widget<'a>() -> Paragraph<'a> {
