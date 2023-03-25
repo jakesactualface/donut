@@ -27,9 +27,7 @@ pub enum Statement {
 
 impl ToNode for Statement {
     fn to_node(self) -> Node {
-        match self {
-            s => Node::Statement(s),
-        }
+        Node::Statement(self)
     }
 }
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -99,9 +97,7 @@ pub enum Expression {
 
 impl ToNode for Expression {
     fn to_node(self) -> Node {
-        match self {
-            s => Node::Expression(s),
-        }
+        Node::Expression(self)
     }
 }
 

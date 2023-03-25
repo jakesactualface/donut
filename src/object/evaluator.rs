@@ -100,23 +100,17 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
             left,
             operator,
             right,
-        } => {
-            eval_infix_expression(*left, operator, *right, env)
-        }
+        } => eval_infix_expression(*left, operator, *right, env),
         Expression::ShortCircuitExpression {
             left,
             operator,
             right,
-        } => {
-            eval_short_circuit_expression(*left, operator, *right, env)
-        }
+        } => eval_short_circuit_expression(*left, operator, *right, env),
         Expression::IfExpression {
             condition,
             consequence,
             alternative,
-        } => {
-            eval_if_expression(*condition, consequence, alternative, env)
-        }
+        } => eval_if_expression(*condition, *consequence, alternative, env),
         Expression::WhileExpression { condition, body } => {
             eval_while_expression(*condition, body, env)
         }
@@ -133,9 +127,7 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
             Array(evaluated_elements)
         }
         Expression::Hash { pairs } => eval_hash_expression(pairs, env),
-        Expression::Index { value, index } => {
-            eval_index_expression(value, index, env)
-        }
+        Expression::Index { value, index } => eval_index_expression(*value, *index, env),
         Expression::Function { parameters, body } => Function {
             parameters,
             body: *body,
@@ -144,9 +136,7 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
         Expression::Call {
             function,
             arguments,
-        } => {
-            eval_call_expression(function, arguments, env)
-        }
+        } => eval_call_expression(*function, arguments, env),
         Expression::Mutation { target, value } => eval_mutation_expression(*target, *value, env),
         Expression::Macro {
             parameters: _parameters,
@@ -172,14 +162,10 @@ fn eval_quote(arguments: Vec<Expression>, env: Rc<RefCell<Environment>>) -> Obje
     if arguments.len() != 1 {
         return Error(String::from("Expected single argument for `quote`!"));
     }
-    return Quote(eval_unquoted(
-        arguments.get(0).unwrap().clone(),
-        env,
-    ));
+    return Quote(eval_unquoted(arguments.get(0).unwrap().clone(), env));
 }
 
 fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, env: Rc<RefCell<Environment>>) -> T {
-    
     let modifier: ModifierFunction = |n, e| -> Node {
         match n.clone() {
             Node::Expression(Expression::Call {
@@ -211,11 +197,11 @@ fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, env: Rc<RefCell<Environment>
 }
 
 fn eval_index_expression(
-    value: Box<Expression>,
-    index: Box<Expression>,
+    value: Expression,
+    index: Expression,
     env: Rc<RefCell<Environment>>,
 ) -> Object {
-    match (eval(*value, env.clone()), eval(*index, env)) {
+    match (eval(value, env.clone()), eval(index, env)) {
         (Error(x), _) => Error(x),
         (_, Error(index)) => Error(index),
         (Array(array), Integer(index)) => {
@@ -371,14 +357,14 @@ fn eval_short_circuit_expression(
 
 fn eval_if_expression(
     condition: Expression,
-    consequence: Box<Statement>,
+    consequence: Statement,
     alternative: Option<Box<Statement>>,
     env: Rc<RefCell<Environment>>,
 ) -> Object {
     let truthy = is_truthy(condition, env.clone());
 
     if truthy {
-        return eval(*consequence, env);
+        return eval(consequence, env);
     } else if alternative.is_some() {
         return eval(*alternative.unwrap(), env);
     }
@@ -419,11 +405,11 @@ fn is_truthy(expression: Expression, env: Rc<RefCell<Environment>>) -> bool {
 }
 
 fn eval_call_expression(
-    function: Box<Expression>,
+    function: Expression,
     arguments: Vec<Expression>,
     env: Rc<RefCell<Environment>>,
 ) -> Object {
-    let evaluated = eval(*function, env.clone());
+    let evaluated = eval(function, env.clone());
     if let Error(_) = evaluated {
         return evaluated;
     }
@@ -569,9 +555,7 @@ fn eval_mutation_expression(
                 )),
             };
         }
-        t => {
-            Error(format!("Mutation target not supported: {t:?}"))
-        }
+        t => Error(format!("Mutation target not supported: {t:?}")),
     }
 }
 

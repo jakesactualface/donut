@@ -38,14 +38,14 @@ pub fn define_macros(program: &mut Program, env: Rc<RefCell<Environment>>) {
         .collect();
 }
 
-fn is_macro<'r>((_, statement): &'r (usize, Statement)) -> bool {
-    match statement {
+fn is_macro((_, statement): &(usize, Statement)) -> bool {
+    matches!(
+        statement,
         Statement::Let {
             name: _,
             value: Expression::Macro { .. },
-        } => true,
-        _ => false,
-    }
+        }
+    )
 }
 
 pub fn expand_macros(program: &mut Program, env: Rc<RefCell<Environment>>) -> Program {

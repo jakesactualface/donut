@@ -65,6 +65,12 @@ impl InputBox {
     }
 }
 
+impl Default for InputBox {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct HistoryList {
     pub state: ListState,
     pub items: Vec<String>,
@@ -178,6 +184,12 @@ impl HistoryList {
     }
 }
 
+impl Default for HistoryList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn build_message_widget<'a>() -> Paragraph<'a> {
     let evaluation_message = vec![
         Span::raw("Press "),
@@ -205,7 +217,7 @@ pub fn build_paragraph_widget<'a>(input: &'a str, title: &'a str) -> Paragraph<'
 }
 
 pub fn build_list_widget<'a>(
-    items: &'a Vec<String>,
+    items: &'a [String],
     separator_index: Option<usize>,
     select_flag: &'a str,
 ) -> List<'a> {

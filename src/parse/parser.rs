@@ -355,16 +355,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_mutate_expression(&mut self) -> Option<Expression> {
-        let target: Expression;
-
         self.next();
-        match self.parse_expression(Precedence::Prefix) {
-            Some(Expression::Identifier { name }) => {
-                target = Expression::Identifier { name };
-            }
-            Some(Expression::Index { value, index }) => {
-                target = Expression::Index { value, index };
-            }
+        let target: Expression = match self.parse_expression(Precedence::Prefix) {
+            Some(Expression::Identifier { name }) => Expression::Identifier { name },
+            Some(Expression::Index { value, index }) => Expression::Index { value, index },
             Some(token) => {
                 self.errors
                     .push(format!("Mutation not supported for token {token:?}"));
@@ -374,7 +368,7 @@ impl<'a> Parser<'a> {
                 self.errors.push("Expected mutation target!".to_string());
                 return None;
             }
-        }
+        };
 
         if !self.expect_peek(Token::Assignment) {
             return None;
@@ -400,14 +394,10 @@ impl<'a> Parser<'a> {
         }
 
         let current_to_identifier = |c: &Option<Token>| match c {
-            Some(Token::Identifier(name)) => {
-                Some(Expression::Identifier {
-                    name: name.to_owned(),
-                })
-            }
-            _ => {
-                None
-            }
+            Some(Token::Identifier(name)) => Some(Expression::Identifier {
+                name: name.to_owned(),
+            }),
+            _ => None,
         };
 
         let first_param = current_to_identifier(&self.current);
@@ -831,9 +821,11 @@ mod tests {
         consequences: Vec<Statement>,
         alternatives: Option<Vec<Statement>>,
     ) -> Expression {
-        let alt = alternatives.map(|statement| Box::new(Statement::Block {
+        let alt = alternatives.map(|statement| {
+            Box::new(Statement::Block {
                 statements: statement,
-            }));
+            })
+        });
         Expression::IfExpression {
             condition: Box::new(condition),
             consequence: Box::new(Statement::Block {

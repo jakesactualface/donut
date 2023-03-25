@@ -96,7 +96,7 @@ impl<'a> Lexer<'a> {
                 if c.is_ascii_digit() {
                     // Capture remainder of number
                     let number_string = self.concat_until(&c, |x| !x.is_ascii_digit());
-                    match i64::from_str_radix(&number_string, 10) {
+                    match number_string.parse::<i64>() {
                         Ok(x) => return Token::Integer(x),
                         Err(e) => panic!("Error parsing integer: {}", e),
                     }

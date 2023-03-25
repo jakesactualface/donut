@@ -239,15 +239,7 @@ fn sort_builtin(objects: &[Object]) -> Object {
     }
     let compare_integer_objects = |a: &Object, b: &Object| -> Ordering {
         match (a, b) {
-            (Object::Integer(l), Object::Integer(r)) => {
-                if l == r {
-                    Ordering::Equal
-                } else if l < r {
-                    return Ordering::Less;
-                } else {
-                    return Ordering::Greater;
-                }
-            }
+            (Object::Integer(l), Object::Integer(r)) => l.cmp(r),
             _ => todo!("Not implemented for objects: {a:?}, {b:?}"),
         }
     };
@@ -289,9 +281,7 @@ fn to_int_builtin(objects: &[Object]) -> Object {
                 ))
             }
         }
-        Object::Integer(int) => {
-            Object::Integer(int.to_owned())
-        }
+        Object::Integer(int) => Object::Integer(int.to_owned()),
         x => Error(format!("Argument to `toInt` not supported: {:?}", x)),
     }
 }

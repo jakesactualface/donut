@@ -47,3 +47,9 @@ impl Interpreter {
         return self.output.drain(..).collect();
     }
 }
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
