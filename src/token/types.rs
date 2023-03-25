@@ -72,7 +72,7 @@ lazy_static! {
 
 impl Token {
     pub fn precedence(&self) -> &Precedence {
-        if let Some(precedence) = PRECEDENCES.get(&self) {
+        if let Some(precedence) = PRECEDENCES.get(self) {
             return precedence;
         }
         &Precedence::Lowest

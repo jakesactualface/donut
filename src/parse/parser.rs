@@ -62,25 +62,25 @@ impl<'a> Parser<'a> {
         parser.register_infix(Token::Asterisk, move |p, e| p.parse_infix_expression(e));
         parser.register_infix(Token::LParen, move |p, e| p.parse_call_expression(e));
         parser.register_infix(Token::LBracket, move |p, e| p.parse_index_expression(e));
-        return parser;
+        parser
     }
 
     fn next(&mut self) -> Option<Token> {
         self.current = self.lexer.next();
-        return self.current.clone();
+        self.current.clone()
     }
 
     fn expect_peek(&mut self, token: Token) -> bool {
         match self.lexer.peek() {
             Some(p) if *p == token => {
                 self.next();
-                return true;
+                true
             }
             _ => {
                 self.peek_error(token);
-                return false;
+                false
             }
-        };
+        }
     }
 
     fn register_prefix(&mut self, token: Token, function: PrefixParse) {
@@ -107,7 +107,7 @@ impl<'a> Parser<'a> {
     pub fn parse_program(&mut self) -> Program {
         let mut statements: Vec<Statement> = Vec::new();
 
-        while let Some(_) = self.next() {
+        while self.next().is_some() {
             if let Some(statement) = self.parse_statement() {
                 statements.push(statement);
             }
@@ -153,7 +153,7 @@ impl<'a> Parser<'a> {
         }
 
         Some(Statement::Let {
-            name: name.clone(),
+            name,
             value: value.unwrap(),
         })
     }
@@ -179,9 +179,7 @@ impl<'a> Parser<'a> {
     fn parse_expression_statement(&mut self) -> Option<Statement> {
         let statement = self.parse_expression(Precedence::Lowest);
 
-        if statement.is_none() {
-            return None;
-        }
+        statement.as_ref()?;
 
         if let Some(Token::Semicolon) = self.lexer.peek() {
             self.next();
@@ -236,7 +234,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             }
         }
-        return expression;
+        expression
     }
 
     fn parse_identifier(&mut self) -> Option<Expression> {
@@ -330,10 +328,10 @@ impl<'a> Parser<'a> {
             self.errors.push(String::from("Expected function body!"));
             return None;
         }
-        return Some(Expression::Function {
+        Some(Expression::Function {
             parameters,
             body: Box::new(block.unwrap()),
-        });
+        })
     }
 
     fn parse_macro_literal(&mut self) -> Option<Expression> {
@@ -350,10 +348,10 @@ impl<'a> Parser<'a> {
             self.errors.push(String::from("Expected macro body!"));
             return None;
         }
-        return Some(Expression::Macro {
+        Some(Expression::Macro {
             parameters,
             body: Box::new(block.unwrap()),
-        });
+        })
     }
 
     fn parse_mutate_expression(&mut self) -> Option<Expression> {
@@ -373,7 +371,7 @@ impl<'a> Parser<'a> {
                 return None;
             }
             None => {
-                self.errors.push(format!("Expected mutation target!"));
+                self.errors.push("Expected mutation target!".to_string());
                 return None;
             }
         }
@@ -403,12 +401,12 @@ impl<'a> Parser<'a> {
 
         let current_to_identifier = |c: &Option<Token>| match c {
             Some(Token::Identifier(name)) => {
-                return Some(Expression::Identifier {
+                Some(Expression::Identifier {
                     name: name.to_owned(),
                 })
             }
             _ => {
-                return None;
+                None
             }
         };
 
@@ -435,7 +433,7 @@ impl<'a> Parser<'a> {
             return vec![];
         }
 
-        return parameters;
+        parameters
     }
 
     fn parse_grouped_expression(&mut self) -> Option<Expression> {
@@ -444,7 +442,7 @@ impl<'a> Parser<'a> {
         if !self.expect_peek(Token::RParen) {
             return None;
         }
-        return expression;
+        expression
     }
 
     fn parse_prefix_expression(&mut self) -> Option<Expression> {
@@ -466,7 +464,7 @@ impl<'a> Parser<'a> {
             self.errors.push(String::from("Missing expression!"));
             return None;
         }
-        return Some(Expression::PrefixExpression { operator, value });
+        Some(Expression::PrefixExpression { operator, value })
     }
 
     fn parse_if_expression(&mut self) -> Option<Expression> {
@@ -476,9 +474,7 @@ impl<'a> Parser<'a> {
         self.next();
         let condition = self.parse_expression(Precedence::Lowest);
 
-        if condition.is_none() {
-            return None;
-        }
+        condition.as_ref()?;
 
         if !self.expect_peek(Token::RParen) {
             return None;
@@ -488,9 +484,7 @@ impl<'a> Parser<'a> {
         }
         let consequence = self.parse_block_statement();
 
-        if consequence.is_none() {
-            return None;
-        }
+        consequence.as_ref()?;
 
         let mut alternative = None;
         if let Some(Token::Else) = self.lexer.peek() {
@@ -505,11 +499,11 @@ impl<'a> Parser<'a> {
             }
         }
 
-        return Some(Expression::IfExpression {
+        Some(Expression::IfExpression {
             condition: Box::new(condition.unwrap()),
             consequence: Box::new(consequence.unwrap()),
             alternative,
-        });
+        })
     }
 
     fn parse_while_expression(&mut self) -> Option<Expression> {
@@ -519,9 +513,7 @@ impl<'a> Parser<'a> {
         self.next();
         let condition = self.parse_expression(Precedence::Lowest);
 
-        if condition.is_none() {
-            return None;
-        }
+        condition.as_ref()?;
 
         if !self.expect_peek(Token::RParen) {
             return None;
@@ -531,14 +523,12 @@ impl<'a> Parser<'a> {
         }
         let body = self.parse_block_statement();
 
-        if body.is_none() {
-            return None;
-        }
+        body.as_ref()?;
 
-        return Some(Expression::WhileExpression {
+        Some(Expression::WhileExpression {
             condition: Box::new(condition.unwrap()),
             body: Box::new(body.unwrap()),
-        });
+        })
     }
 
     fn parse_block_statement(&mut self) -> Option<Statement> {
@@ -573,14 +563,14 @@ impl<'a> Parser<'a> {
             return None;
         }
         if let Some(right) = self.parse_expression(operator.precedence().clone()) {
-            return Some(Expression::InfixExpression {
+            Some(Expression::InfixExpression {
                 left,
                 operator,
                 right: Box::new(right),
-            });
+            })
         } else {
             self.errors.push(String::from("Missing expression!"));
-            return None;
+            None
         }
     }
 
@@ -597,14 +587,14 @@ impl<'a> Parser<'a> {
             return None;
         }
         if let Some(right) = self.parse_expression(operator.precedence().clone()) {
-            return Some(Expression::ShortCircuitExpression {
+            Some(Expression::ShortCircuitExpression {
                 left,
                 operator,
                 right: Box::new(right),
-            });
+            })
         } else {
             self.errors.push(String::from("Missing expression!"));
-            return None;
+            None
         }
     }
 
@@ -644,7 +634,7 @@ impl<'a> Parser<'a> {
             return vec![];
         }
 
-        return arguments;
+        arguments
     }
 
     fn parse_index_expression(&mut self, value: Box<Expression>) -> Option<Expression> {
@@ -661,10 +651,10 @@ impl<'a> Parser<'a> {
             return None;
         }
 
-        return Some(Expression::Index {
+        Some(Expression::Index {
             value,
             index: Box::new(index.unwrap()),
-        });
+        })
     }
 }
 
@@ -841,12 +831,9 @@ mod tests {
         consequences: Vec<Statement>,
         alternatives: Option<Vec<Statement>>,
     ) -> Expression {
-        let alt = match alternatives {
-            Some(statement) => Some(Box::new(Statement::Block {
+        let alt = alternatives.map(|statement| Box::new(Statement::Block {
                 statements: statement,
-            })),
-            _ => None,
-        };
+            }));
         Expression::IfExpression {
             condition: Box::new(condition),
             consequence: Box::new(Statement::Block {

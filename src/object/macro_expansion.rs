@@ -43,20 +43,20 @@ fn is_macro<'r>((_, statement): &'r (usize, Statement)) -> bool {
         Statement::Let {
             name: _,
             value: Expression::Macro { .. },
-        } => return true,
-        _ => return false,
+        } => true,
+        _ => false,
     }
 }
 
 pub fn expand_macros(program: &mut Program, env: Rc<RefCell<Environment>>) -> Program {
-    return Program {
+    Program {
         statements: program
             .statements
             .clone()
             .into_iter()
             .map(|s| s.modify(macro_modifier, env.clone()))
             .collect(),
-    };
+    }
 }
 
 fn macro_modifier(node: Node, env: Rc<RefCell<Environment>>) -> Node {
@@ -87,12 +87,12 @@ fn macro_modifier(node: Node, env: Rc<RefCell<Environment>>) -> Node {
         let evaluated = eval(body, eval_env);
 
         if let Object::Quote(_) = evaluated {
-            return evaluated.to_node();
+            evaluated.to_node()
         } else {
             panic!("Expected returned Quote from macro");
         }
     } else {
-        return node;
+        node
     }
 }
 
@@ -100,9 +100,9 @@ fn is_macro_call(expression: Expression, env: Rc<RefCell<Environment>>) -> Optio
     match expression {
         Expression::Identifier { name } => {
             if let Some(retrieved_object) = env.borrow_mut().get(&name) {
-                return Rc::try_unwrap(retrieved_object).ok();
+                Rc::try_unwrap(retrieved_object).ok()
             } else {
-                return None;
+                None
             }
         }
         _ => None,
@@ -131,7 +131,7 @@ fn extend_macro_environment(
         extended.set(param_name, arg);
     }
 
-    return Rc::new(RefCell::new(extended));
+    Rc::new(RefCell::new(extended))
 }
 
 #[cfg(test)]
@@ -159,7 +159,7 @@ mod tests {
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
         assert_eq!(Vec::<String>::new(), parser.errors);
-        return program;
+        program
     }
 
     #[test]

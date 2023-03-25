@@ -34,7 +34,7 @@ impl Hash for Object {
 }
 
 impl ToNode for Object {
-    fn to_node(self: Self) -> Node {
+    fn to_node(self) -> Node {
         match self {
             Object::Integer(value) => Node::Expression(Expression::Integer { value }),
             Object::Boolean(value) => Node::Expression(Expression::Boolean { value }),
@@ -47,9 +47,9 @@ impl ToNode for Object {
                         _ => panic!("Expected expression node!"),
                     })
                     .collect();
-                return Node::Expression(Expression::Array {
+                Node::Expression(Expression::Array {
                     elements: expressions,
-                });
+                })
             }
             Object::Hash(pairs) => {
                 let expression_pairs = pairs
@@ -59,9 +59,9 @@ impl ToNode for Object {
                         _ => panic!("Expected expression node!"),
                     })
                     .collect();
-                return Node::Expression(Expression::Hash {
+                Node::Expression(Expression::Hash {
                     pairs: expression_pairs,
-                });
+                })
             }
             Object::Quote(expression) => expression.to_node(),
             object => todo!("Not implemented for object: {object:?}"),
@@ -95,35 +95,35 @@ impl Environment {
             return Some(Rc::new(object.clone()));
         }
         if let Some(outer) = &self.outer {
-            return outer.borrow().get(name).clone();
+            return outer.borrow().get(name);
         }
-        return None;
+        None
     }
 
     pub fn set(&mut self, name: String, value: Object) -> Object {
         self.store.insert(name, value.clone());
-        return value;
+        value
     }
 
     pub fn assign(&mut self, name: String, value: Object) -> Object {
-        if let Some(_) = self.store.get(&name) {
+        if self.store.get(&name).is_some() {
             return Object::Error(format!(
                 "Declaration already exists in current context for identifier: {name}",
             ));
         }
         self.store.insert(name, value.clone());
-        return value;
+        value
     }
 
     pub fn reassign(&mut self, name: String, value: Object) -> Object {
-        if let Some(_) = self.store.get(&name) {
+        if self.store.get(&name).is_some() {
             self.store.insert(name, value.clone());
             return value;
         } else if let Some(outer) = &self.outer {
             outer.borrow_mut().set(name, value.clone());
             return value;
         }
-        return Object::Error(format!("No previous declaration for identifier: {name}",));
+        Object::Error(format!("No previous declaration for identifier: {name}",))
     }
 }
 

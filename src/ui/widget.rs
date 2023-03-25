@@ -94,16 +94,16 @@ impl HistoryList {
             }
         }
         self.eval_index = stop_index;
-        return returned_items;
+        returned_items
     }
 
     pub fn push(&mut self, item: String) {
-        if self.items.len() == 0 {
+        if self.items.is_empty() {
             self.items.push(item);
             self.state.select(Some(0));
             return;
         }
-        if let None = self.state.selected() {
+        if self.state.selected().is_none() {
             self.items.push(item);
             self.state.select(Some(self.items.len() - 1));
             return;
@@ -119,13 +119,13 @@ impl HistoryList {
     }
 
     pub fn pop(&mut self) -> Option<String> {
-        if self.items.len() == 0 {
+        if self.items.is_empty() {
             return None;
         }
         if self.eval_index >= self.items.len() {
             return None;
         }
-        if let None = self.state.selected() {
+        if self.state.selected().is_none() {
             return self.items.pop();
         }
         let selected = self.state.selected().unwrap();
@@ -139,7 +139,7 @@ impl HistoryList {
             self.state.select(Some(selected.saturating_sub(1)));
             return Some(item);
         }
-        return None;
+        None
     }
 
     pub fn next(&mut self) {
@@ -174,7 +174,7 @@ impl HistoryList {
         if let Some(selected) = self.state.selected() {
             return self.items.get(selected);
         }
-        return None;
+        None
     }
 }
 
@@ -216,13 +216,13 @@ pub fn build_list_widget<'a>(
             format!("{}: {}", i + 1, text)
                 .lines()
                 .map(|l| l.to_owned())
-                .map(|l| Spans::from(l))
+                .map(Spans::from)
                 .collect::<Vec<Spans>>()
         })
         .flat_map(|v| v.into_iter())
         .enumerate()
         .map(|(i, spans)| {
-            if let None = separator_index {
+            if separator_index.is_none() {
                 return ListItem::new(spans);
             }
             if i < separator_index.unwrap() {

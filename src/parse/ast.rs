@@ -8,12 +8,12 @@ pub enum Node {
 }
 
 pub trait ToNode {
-    fn to_node(self: Self) -> Node;
+    fn to_node(self) -> Node;
 }
 
 impl ToNode for Node {
-    fn to_node(self: Self) -> Node {
-        return self;
+    fn to_node(self) -> Node {
+        self
     }
 }
 
@@ -111,7 +111,7 @@ pub struct Program {
 }
 
 impl ToNode for Program {
-    fn to_node(self: Self) -> Node {
+    fn to_node(self) -> Node {
         Node::Program(self.statements)
     }
 }

@@ -41,19 +41,18 @@ impl Repl {
     fn evaluate(&mut self) {
         let input = self.input.clear();
 
-        if input.len() > 0 {
+        if !input.is_empty() {
             self.command_history.push(input);
         }
 
         let commands_to_evaluate = self.command_history.get_new_lines_to_cursor();
-        if commands_to_evaluate.len() == 0 {
+        if commands_to_evaluate.is_empty() {
             return;
         }
 
         self.last_eval.clear();
         let full_command: String = commands_to_evaluate
             .into_iter()
-            .map(|s| s.clone())
             .collect::<Vec<String>>()
             .join(" ");
 

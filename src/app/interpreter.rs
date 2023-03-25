@@ -40,7 +40,7 @@ impl Interpreter {
         let evaluated = eval(expanded, self.eval_env.clone());
         self.output.append(&mut get_output());
 
-        return evaluated;
+        evaluated
     }
 
     pub fn get_output(&mut self) -> Vec<String> {

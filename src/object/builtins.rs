@@ -45,7 +45,7 @@ pub fn get_output() -> Vec<String> {
 
 fn defined_builtin(_objects: &[Object]) -> Object {
     // Dummy implementation to support identifying calls to `defined`
-    return Null;
+    Null
 }
 
 fn file_lines_builtin(objects: &[Object]) -> Object {
@@ -55,7 +55,7 @@ fn file_lines_builtin(objects: &[Object]) -> Object {
             objects.len()
         ));
     }
-    return match &objects[0] {
+    match &objects[0] {
         Object::String(value) => {
             if let Ok(lines_iter) = read_lines(value) {
                 return Object::Array(
@@ -69,7 +69,7 @@ fn file_lines_builtin(objects: &[Object]) -> Object {
             ))
         }
         x => Error(format!("Argument to `fileLines` not supported: {x:?}")),
-    };
+    }
 }
 
 fn read_lines<P>(filename: P) -> Result<Lines<BufReader<File>>>
@@ -89,16 +89,16 @@ fn first_builtin(objects: &[Object]) -> Object {
     }
     return match &objects[0] {
         Object::String(value) => {
-            if value.len() == 0 {
+            if value.is_empty() {
                 return Error(format!(
                     "Argument to `first` has no first element: {:?}",
                     &objects[0]
                 ));
             }
-            Object::String(String::from(value.chars().nth(0).unwrap()))
+            Object::String(String::from(value.chars().next().unwrap()))
         }
         Object::Array(elements) => {
-            if elements.len() == 0 {
+            if elements.is_empty() {
                 return Error(format!(
                     "Argument to `first` has no first element: {:?}",
                     &objects[0]
@@ -118,15 +118,15 @@ fn has_key_builtin(objects: &[Object]) -> Object {
         ));
     }
     let key = objects.get(1).unwrap();
-    return match &objects[0] {
+    match &objects[0] {
         Object::Hash(map) => {
             if map.contains_key(key) {
                 return Object::Boolean(true);
             }
-            return Object::Boolean(false);
+            Object::Boolean(false)
         }
         x => Error(format!("Argument to `hasKey` not supported: {:?}", x)),
-    };
+    }
 }
 
 fn last_builtin(objects: &[Object]) -> Object {
@@ -138,7 +138,7 @@ fn last_builtin(objects: &[Object]) -> Object {
     }
     return match &objects[0] {
         Object::String(value) => {
-            if value.len() == 0 {
+            if value.is_empty() {
                 return Error(format!(
                     "Argument to `last` has no last element: {:?}",
                     &objects[0]
@@ -147,7 +147,7 @@ fn last_builtin(objects: &[Object]) -> Object {
             Object::String(String::from(value.chars().nth(value.len() - 1).unwrap()))
         }
         Object::Array(elements) => {
-            if elements.len() == 0 {
+            if elements.is_empty() {
                 return Error(format!(
                     "Argument to `last` has no last element: {:?}",
                     &objects[0]
@@ -180,24 +180,24 @@ fn push_builtin(objects: &[Object]) -> Object {
             objects.len()
         ));
     }
-    return match (&objects[0], &objects[1]) {
+    match (&objects[0], &objects[1]) {
         (Object::Array(elements), item) => {
             let mut new_elements = elements.clone();
             new_elements.push(item.clone());
-            return Object::Array(new_elements);
+            Object::Array(new_elements)
         }
         (array, _) => Error(format!("Argument to `push` not supported: {:?}", array)),
-    };
+    }
 }
 
 fn puts_builtin(objects: &[Object]) -> Object {
-    for object in objects.into_iter() {
+    for object in objects.iter() {
         match object {
-            Object::String(value) => do_print(format!("{}", value)),
+            Object::String(value) => do_print(value.to_string()),
             o => do_print(format!("{o:#?}")),
         };
     }
-    return Null;
+    Null
 }
 
 fn rest_builtin(objects: &[Object]) -> Object {
@@ -209,7 +209,7 @@ fn rest_builtin(objects: &[Object]) -> Object {
     }
     return match &objects[0] {
         Object::String(value) => {
-            if value.len() == 0 {
+            if value.is_empty() {
                 return Error(format!(
                     "Argument to `rest` has no elements: {:?}",
                     &objects[0]
@@ -218,13 +218,13 @@ fn rest_builtin(objects: &[Object]) -> Object {
             Object::String(value.chars().skip(1).collect())
         }
         Object::Array(elements) => {
-            if elements.len() == 0 {
+            if elements.is_empty() {
                 return Error(format!(
                     "Argument to `rest` has no elements: {:?}",
                     &objects[0]
                 ));
             }
-            Object::Array(elements.iter().skip(1).map(|e| e.clone()).collect())
+            Object::Array(elements.iter().skip(1).cloned().collect())
         }
         x => Error(format!("Argument to `rest` not supported: {:?}", x)),
     };
@@ -241,7 +241,7 @@ fn sort_builtin(objects: &[Object]) -> Object {
         match (a, b) {
             (Object::Integer(l), Object::Integer(r)) => {
                 if l == r {
-                    return Ordering::Equal;
+                    Ordering::Equal
                 } else if l < r {
                     return Ordering::Less;
                 } else {
@@ -251,9 +251,9 @@ fn sort_builtin(objects: &[Object]) -> Object {
             _ => todo!("Not implemented for objects: {a:?}, {b:?}"),
         }
     };
-    return match &objects[0] {
+    match &objects[0] {
         Object::Array(elements) => {
-            if elements.len() == 0 {
+            if elements.is_empty() {
                 return Error(format!(
                     "Argument to `sort` has no elements: {:?}",
                     &objects[0]
@@ -264,12 +264,12 @@ fn sort_builtin(objects: &[Object]) -> Object {
             Object::Array(sorted_elements)
         }
         x => Error(format!("Argument to `sort` not supported: {:?}", x)),
-    };
+    }
 }
 
 fn quote_builtin(_objects: &[Object]) -> Object {
     // Dummy implementation to support identifying calls to `quote`
-    return Null;
+    Null
 }
 
 fn to_int_builtin(objects: &[Object]) -> Object {
@@ -279,21 +279,21 @@ fn to_int_builtin(objects: &[Object]) -> Object {
             objects.len()
         ));
     }
-    return match &objects[0] {
+    match &objects[0] {
         Object::String(value) => {
             if let Ok(int) = value.parse::<i64>() {
-                return Object::Integer(int);
+                Object::Integer(int)
             } else {
-                return Error(format!(
+                Error(format!(
                     "Argument to `toInt` could not be parsed to integer: {value:?}"
-                ));
+                ))
             }
         }
         Object::Integer(int) => {
-            return Object::Integer(int.to_owned());
+            Object::Integer(int.to_owned())
         }
         x => Error(format!("Argument to `toInt` not supported: {:?}", x)),
-    };
+    }
 }
 
 #[cfg(test)]

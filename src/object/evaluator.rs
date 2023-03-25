@@ -38,7 +38,7 @@ pub fn eval(node: impl ToNode, env: Rc<RefCell<Environment>>) -> Object {
                     _ => continue,
                 };
             }
-            return evaluated;
+            evaluated
         }
         Node::Statement(s) => eval_statement(s, env),
         Node::Expression(e) => eval_expression(e, env),
@@ -56,10 +56,10 @@ fn eval_statement(statement: Statement, env: Rc<RefCell<Environment>>) -> Object
         }
         Statement::Return { value } => {
             let evaluated = eval(value, env);
-            return match evaluated {
+            match evaluated {
                 Error(_) => evaluated,
                 _ => Return(Box::new(evaluated)),
-            };
+            }
         }
         Statement::Expression { value } => eval_expression(value, env),
         Statement::Block { statements } => {
@@ -78,7 +78,7 @@ fn eval_statement(statement: Statement, env: Rc<RefCell<Environment>>) -> Object
                     _ => continue,
                 };
             }
-            return evaluated;
+            evaluated
         }
     }
 }
@@ -91,34 +91,34 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
         Expression::Boolean { value } => native_bool_to_boolean(value),
         Expression::PrefixExpression { operator, value } => {
             let evaluated = eval(*value, env.clone());
-            return match evaluated {
+            match evaluated {
                 Error(_) => evaluated,
                 _ => eval_prefix_expression(operator, evaluated, env),
-            };
+            }
         }
         Expression::InfixExpression {
             left,
             operator,
             right,
         } => {
-            return eval_infix_expression(*left, operator, *right, env);
+            eval_infix_expression(*left, operator, *right, env)
         }
         Expression::ShortCircuitExpression {
             left,
             operator,
             right,
         } => {
-            return eval_short_circuit_expression(*left, operator, *right, env);
+            eval_short_circuit_expression(*left, operator, *right, env)
         }
         Expression::IfExpression {
             condition,
             consequence,
             alternative,
         } => {
-            return eval_if_expression(*condition, consequence, alternative, env);
+            eval_if_expression(*condition, consequence, alternative, env)
         }
         Expression::WhileExpression { condition, body } => {
-            return eval_while_expression(*condition, body, env);
+            eval_while_expression(*condition, body, env)
         }
         Expression::Array { elements } => {
             let mut evaluated_elements: Vec<Object> = vec![];
@@ -130,22 +130,22 @@ fn eval_expression(expression: Expression, env: Rc<RefCell<Environment>>) -> Obj
                 }
                 evaluated_elements.push(evaluated_element);
             }
-            return Array(evaluated_elements);
+            Array(evaluated_elements)
         }
         Expression::Hash { pairs } => eval_hash_expression(pairs, env),
         Expression::Index { value, index } => {
-            return eval_index_expression(value, index, env);
+            eval_index_expression(value, index, env)
         }
         Expression::Function { parameters, body } => Function {
             parameters,
             body: *body,
-            env: env.clone(),
+            env,
         },
         Expression::Call {
             function,
             arguments,
         } => {
-            return eval_call_expression(function, arguments, env);
+            eval_call_expression(function, arguments, env)
         }
         Expression::Mutation { target, value } => eval_mutation_expression(*target, *value, env),
         Expression::Macro {
@@ -174,13 +174,13 @@ fn eval_quote(arguments: Vec<Expression>, env: Rc<RefCell<Environment>>) -> Obje
     }
     return Quote(eval_unquoted(
         arguments.get(0).unwrap().clone(),
-        env.clone(),
+        env,
     ));
 }
 
 fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, env: Rc<RefCell<Environment>>) -> T {
-    let modifier: ModifierFunction;
-    modifier = |n, e| -> Node {
+    
+    let modifier: ModifierFunction = |n, e| -> Node {
         match n.clone() {
             Node::Expression(Expression::Call {
                 function,
@@ -196,18 +196,18 @@ fn eval_unquoted<T: ToNode + Modifiable>(quoted: T, env: Rc<RefCell<Environment>
                         return eval(arg, e).to_node();
                     }
                 }
-                return n;
+                n
             }
             Node::Expression(Expression::Identifier { name }) => {
                 if name == "unquote" {
                     return eval(n, Rc::new(RefCell::new(Environment::new()))).to_node();
                 }
-                return n;
+                n
             }
             _ => n,
         }
     };
-    return quoted.modify(modifier, env);
+    quoted.modify(modifier, env)
 }
 
 fn eval_index_expression(
@@ -222,27 +222,27 @@ fn eval_index_expression(
             if let Some(object) = array.get(index as usize) {
                 return object.clone();
             }
-            return Error(format!(
+            Error(format!(
                 "index out of bounds! Arrays are zero-indexed. Given: {}, Length: {}",
                 index,
                 array.len()
-            ));
+            ))
         }
         (Hash(map), key) => {
             if let Some(value) = map.get(&key) {
                 return value.clone();
             }
-            return NULL;
+            NULL
         }
         (Object::String(string), Integer(index)) => {
             if let Some(object) = string.chars().nth(index as usize) {
                 return Object::String(String::from(object));
             }
-            return Error(format!(
+            Error(format!(
                 "index out of bounds! Arrays are zero-indexed. Given: {}, Length: {}",
                 index,
                 string.len()
-            ));
+            ))
         }
         (collection, Integer(_)) => Error(format!(
             "index operator not implemented for: {:?}",
@@ -259,7 +259,7 @@ fn native_bool_to_boolean(input: bool) -> Object {
     if input {
         return TRUE;
     }
-    return FALSE;
+    FALSE
 }
 
 fn eval_identifier(name: String, env: Rc<RefCell<Environment>>) -> Object {
@@ -269,7 +269,7 @@ fn eval_identifier(name: String, env: Rc<RefCell<Environment>>) -> Object {
     if has_builtin(&name) {
         return Builtin(name);
     }
-    return Error(format!("identifier not found: {name}"));
+    Error(format!("identifier not found: {name}"))
 }
 
 fn eval_prefix_expression(
@@ -289,7 +289,7 @@ fn eval_prefix_expression(
             Integer(i) => Integer(-i),
             value => Error(format!("unknown operator: {:?}{:?}", operator, value)),
         },
-        operator => return Error(format!("unknown operator: {:?}{:?}", operator, value)),
+        operator => Error(format!("unknown operator: {:?}{:?}", operator, value)),
     }
 }
 
@@ -301,7 +301,7 @@ fn eval_infix_expression(
 ) -> Object {
     let evaluated_left: Object;
     let evaluated_right: Object;
-    match (eval(left, env.clone()), eval(right, env.clone())) {
+    match (eval(left, env.clone()), eval(right, env)) {
         (Error(left), _) => {
             return Error(left);
         }
@@ -349,21 +349,21 @@ fn eval_short_circuit_expression(
     match operator {
         Token::And => {
             let evaluated_left = eval(left, env.clone());
-            return match evaluated_left {
+            match evaluated_left {
                 Error(_) => evaluated_left,
                 Boolean(false) => evaluated_left,
-                Boolean(true) => eval(right, env.clone()),
+                Boolean(true) => eval(right, env),
                 _ => Error(String::from("Expected boolean expression!")),
-            };
+            }
         }
         Token::Or => {
             let evaluated_left = eval(left, env.clone());
-            return match evaluated_left {
+            match evaluated_left {
                 Error(_) => evaluated_left,
                 Boolean(true) => evaluated_left,
-                Boolean(false) => eval(right, env.clone()),
+                Boolean(false) => eval(right, env),
                 _ => Error(String::from("Expected boolean expression!")),
-            };
+            }
         }
         _ => Error(String::from("Expected boolean operand!")),
     }
@@ -382,7 +382,7 @@ fn eval_if_expression(
     } else if alternative.is_some() {
         return eval(*alternative.unwrap(), env);
     }
-    return NULL;
+    NULL
 }
 
 fn eval_while_expression(
@@ -404,7 +404,7 @@ fn eval_while_expression(
             _ => (),
         };
     }
-    return NULL;
+    NULL
 }
 
 fn is_truthy(expression: Expression, env: Rc<RefCell<Environment>>) -> bool {
@@ -451,7 +451,7 @@ fn eval_call_expression(
     }
 
     if let Builtin(name) = &evaluated {
-        let function = get_builtin(&name);
+        let function = get_builtin(name);
         return function(evaluated_arguments.as_slice());
     }
 
@@ -469,12 +469,12 @@ fn eval_call_expression(
                 _ => return Error(String::from("Expected identifier!")),
             };
         }
-        return match eval(inner_body, Rc::new(RefCell::new(extended_env))) {
+        match eval(inner_body, Rc::new(RefCell::new(extended_env))) {
             Return(value) => *value,
             value => value,
-        };
+        }
     } else {
-        return Error(format!("not a function: {evaluated:?}"));
+        Error(format!("not a function: {evaluated:?}"))
     }
 }
 
@@ -500,7 +500,7 @@ fn eval_hash_expression(
         hash.insert(key, value);
     }
 
-    return Hash(hash);
+    Hash(hash)
 }
 
 fn eval_mutation_expression(
@@ -570,9 +570,9 @@ fn eval_mutation_expression(
             };
         }
         t => {
-            return Error(format!("Mutation target not supported: {t:?}"));
+            Error(format!("Mutation target not supported: {t:?}"))
         }
-    };
+    }
 }
 
 #[cfg(test)]

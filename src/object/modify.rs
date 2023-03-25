@@ -21,23 +21,23 @@ impl Modifiable for Statement {
 
         match this_statement {
             Statement::Expression { value } => Statement::Expression {
-                value: value.modify(modifier, env.clone()),
+                value: value.modify(modifier, env),
             },
             Statement::Block { statements } => {
                 let mut modified_statements: Vec<Statement> = vec![];
                 for statement in statements.into_iter() {
                     modified_statements.push(statement.modify(modifier, env.clone()));
                 }
-                return Statement::Block {
+                Statement::Block {
                     statements: modified_statements,
-                };
+                }
             }
             Statement::Return { value } => Statement::Return {
-                value: value.modify(modifier, env.clone()),
+                value: value.modify(modifier, env),
             },
             Statement::Let { name, value } => Statement::Let {
                 name,
-                value: value.modify(modifier, env.clone()),
+                value: value.modify(modifier, env),
             },
         }
     }
@@ -52,7 +52,7 @@ impl Modifiable for Expression {
             panic!("Expected Expression node!");
         }
 
-        return match this_expression {
+        match this_expression {
             Expression::InfixExpression {
                 left,
                 operator,
@@ -60,15 +60,15 @@ impl Modifiable for Expression {
             } => Expression::InfixExpression {
                 left: Box::new(left.modify(modifier, env.clone())),
                 operator,
-                right: Box::new(right.modify(modifier, env.clone())),
+                right: Box::new(right.modify(modifier, env)),
             },
             Expression::PrefixExpression { operator, value } => Expression::PrefixExpression {
                 operator,
-                value: Box::new(value.modify(modifier, env.clone())),
+                value: Box::new(value.modify(modifier, env)),
             },
             Expression::Index { value, index } => Expression::Index {
                 value: Box::new(value.modify(modifier, env.clone())),
-                index: Box::new(index.modify(modifier, env.clone())),
+                index: Box::new(index.modify(modifier, env)),
             },
             Expression::IfExpression {
                 condition,
@@ -81,30 +81,30 @@ impl Modifiable for Expression {
                 } else {
                     modified_alternative = None;
                 }
-                return Expression::IfExpression {
+                Expression::IfExpression {
                     condition: Box::new(condition.modify(modifier, env.clone())),
-                    consequence: Box::new(consequence.modify(modifier, env.clone())),
+                    consequence: Box::new(consequence.modify(modifier, env)),
                     alternative: modified_alternative,
-                };
+                }
             }
             Expression::Function { parameters, body } => {
                 let mut modified_parameters: Vec<Expression> = vec![];
                 for parameter in parameters.into_iter() {
                     modified_parameters.push(parameter.modify(modifier, env.clone()));
                 }
-                return Expression::Function {
+                Expression::Function {
                     parameters: modified_parameters,
-                    body: Box::new(body.modify(modifier, env.clone())),
-                };
+                    body: Box::new(body.modify(modifier, env)),
+                }
             }
             Expression::Array { elements } => {
                 let mut modified_elements: Vec<Expression> = vec![];
                 for element in elements.into_iter() {
                     modified_elements.push(element.modify(modifier, env.clone()));
                 }
-                return Expression::Array {
+                Expression::Array {
                     elements: modified_elements,
-                };
+                }
             }
             Expression::Hash { pairs } => {
                 let mut modified_pairs: Vec<(Expression, Expression)> = vec![];
@@ -114,9 +114,9 @@ impl Modifiable for Expression {
                         value.modify(modifier, env.clone()),
                     ));
                 }
-                return Expression::Hash {
+                Expression::Hash {
                     pairs: modified_pairs,
-                };
+                }
             }
             Expression::Call {
                 function,
@@ -126,18 +126,18 @@ impl Modifiable for Expression {
                 for argument in arguments.into_iter() {
                     modified_arguments.push(argument.modify(modifier, env.clone()));
                 }
-                return Expression::Call {
+                Expression::Call {
                     function,
                     arguments: modified_arguments,
-                };
+                }
             }
             _ => this_expression,
-        };
+        }
     }
 }
 
 pub fn modify(node: Node, modifier: ModifierFunction, env: Rc<RefCell<Environment>>) -> Node {
-    return match node {
+    match node {
         Node::Statement(statement) => statement.modify(modifier, env).to_node(),
         Node::Expression(expression) => expression.modify(modifier, env).to_node(),
         Node::Program(statements) => {
@@ -145,9 +145,9 @@ pub fn modify(node: Node, modifier: ModifierFunction, env: Rc<RefCell<Environmen
             for statement in statements.into_iter() {
                 modified_statements.push(statement.modify(modifier, env.clone()));
             }
-            return Node::Program(modified_statements);
+            Node::Program(modified_statements)
         }
-    };
+    }
 }
 
 #[cfg(test)]
@@ -212,7 +212,7 @@ mod tests {
         if let Node::Expression(Expression::Integer { value: 1 }) = node {
             return Node::Expression(Expression::Integer { value: 2 });
         }
-        return node;
+        node
     }
 
     fn assert_modifier(actual: impl ToNode, expected: impl ToNode, modifier: ModifierFunction) {

@@ -11,10 +11,7 @@ impl<'a> Iterator for Lexer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.take_until(|x| !x.is_whitespace());
-        match self.input.next() {
-            Some(c) => Some(self.pull_next_token(c)),
-            None => None,
-        }
+        self.input.next().map(|c| self.pull_next_token(c))
     }
 }
 
@@ -30,7 +27,7 @@ impl<'a> Lexer<'a> {
         while let Some(next) = self.input.next_if(|c| !condition(c)) {
             taken.push(next);
         }
-        return taken;
+        taken
     }
 
     fn concat_until(&mut self, c: &char, condition: impl Fn(&char) -> bool) -> String {
@@ -46,7 +43,7 @@ impl<'a> Lexer<'a> {
                 Some('=') => {
                     // Consume evaluated equal sign
                     self.next();
-                    return Token::Equal;
+                    Token::Equal
                 }
                 _ => Token::Assignment,
             },
@@ -56,7 +53,7 @@ impl<'a> Lexer<'a> {
                 Some('=') => {
                     // Consume evaluated bang
                     self.next();
-                    return Token::NotEqual;
+                    Token::NotEqual
                 }
                 _ => Token::Bang,
             },
@@ -64,7 +61,7 @@ impl<'a> Lexer<'a> {
                 Some('&') => {
                     // Consume evaluated ampersand
                     self.next();
-                    return Token::And;
+                    Token::And
                 }
                 _ => Token::Illegal,
             },
@@ -72,7 +69,7 @@ impl<'a> Lexer<'a> {
                 Some('|') => {
                     // Consume evaluated bar
                     self.next();
-                    return Token::Or;
+                    Token::Or
                 }
                 _ => Token::Illegal,
             },
@@ -96,9 +93,9 @@ impl<'a> Lexer<'a> {
                     let word_string = self.concat_until(&c, |x| !is_word_char(x));
                     return map_word_to_token(&word_string);
                 }
-                if c.is_digit(10) {
+                if c.is_ascii_digit() {
                     // Capture remainder of number
-                    let number_string = self.concat_until(&c, |x| !x.is_digit(10));
+                    let number_string = self.concat_until(&c, |x| !x.is_ascii_digit());
                     match i64::from_str_radix(&number_string, 10) {
                         Ok(x) => return Token::Integer(x),
                         Err(e) => panic!("Error parsing integer: {}", e),
@@ -148,7 +145,7 @@ impl<'a> Lexer<'a> {
                 None => panic!("Expected string termination character!"),
             }
         }
-        return chars.into_iter().collect();
+        chars.into_iter().collect()
     }
 }
 
