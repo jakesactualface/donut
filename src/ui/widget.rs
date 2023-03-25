@@ -190,18 +190,104 @@ impl Default for HistoryList {
     }
 }
 
+pub fn build_help_widget<'a>() -> Paragraph<'a> {
+    let block = Block::default().title("Help").borders(Borders::ALL);
+    let content = vec![
+        vec![Span::raw("  "), Span::styled(
+            "Panels:",
+            Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED),
+        )],
+        vec![Span::raw("")],
+        vec![
+            Span::styled("    Input: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw("Text manipulation of the selected line of source code."),
+        ],
+        vec![
+            Span::styled("      Keybinds:", Style::default().add_modifier(Modifier::BOLD)),
+        ],
+        vec![
+            Span::raw("        "),
+            Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)),
+            Span::raw(": Inserts the current contents of the "),
+            Span::styled("Input", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" panel below the currently selected line. Note that if the insert position is higher than the last line executed, the new row will instead be appended to the bottom."),
+        ],
+        vec![
+            Span::raw("        "),
+            Span::styled("Left/Right Arrow", Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)),
+            Span::raw(": Moves the character cursor left or right, respectively."),
+        ],
+        vec![Span::raw("")],
+        vec![
+            Span::styled("    History: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw("List of all lines of code which have been entered. Lines which have been executed are dimmed. The line cursor `>>` marks the line which is currently selected."),
+        ],
+        vec![
+            Span::styled("      Keybinds:", Style::default().add_modifier(Modifier::BOLD)),
+        ],
+        vec![
+            Span::raw("        "),
+            Span::styled("Up/Down Arrow", Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)),
+            Span::raw(": Moves the line cursor up or down, respectively."),
+        ],
+        vec![
+            Span::raw("        "),
+            Span::styled("Ctrl+e", Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)),
+            Span::raw(": Continues program execution up to and including the selected line."),
+        ],
+        vec![
+            Span::raw("        "),
+            Span::styled("Ctrl+c", Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)),
+            Span::raw(": Overwrites the contents of the "),
+            Span::styled("Input", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" panel with the contents of the selected line."),
+        ],
+        vec![
+            Span::raw("        "),
+            Span::styled("Ctrl+c", Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)),
+            Span::raw(": Overwrites the contents of the "),
+            Span::styled("Input", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" panel with the contents of the selected line, and also removes that line if it has not been executed."),
+        ],
+        vec![
+            Span::raw("        "),
+            Span::styled("Ctrl+d", Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)),
+            Span::raw(": Deletes the line which is currently selected. If that line has already been executed, the no action is taken."),
+        ],
+        vec![
+            Span::raw("        "),
+            Span::styled("Ctrl+o", Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)),
+            Span::raw(": Evaluates the current contents of the "),
+            Span::styled("Input", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" panel as a relative filepath, and imports the contents of that file at the currently-selected position."),
+        ],
+        vec![Span::raw("")],
+        vec![
+            Span::styled("    Returned: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw("Shows the evaluation result for the last command executed."),
+        ],
+        vec![Span::raw("")],
+        vec![
+            Span::styled("    Output: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw("Shows a history of the standard output results from all executed commands."),
+        ],
+        vec![Span::raw("")],
+    ];
+    let text = Text::from(content.into_iter().map(Spans::from).collect::<Vec<Spans>>());
+    return Paragraph::new(text).block(block);
+}
+
 pub fn build_message_widget<'a>() -> Paragraph<'a> {
     let evaluation_message = vec![
-        Span::raw("Press "),
-        Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(" to continue typing input on the next line, or "),
-        Span::styled("Ctrl+e", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(" to begin evaluation."),
+        Span::raw("Welcome to "),
+        Span::styled("Dough", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(", the Donut interpreter!"),
     ];
     let exit_message = vec![
-        Span::raw(" Press "),
         Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(" to exit."),
+        Span::raw(": exit, "),
+        Span::styled("Ctrl+h", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(": open help."),
     ];
     let text = Text::from(vec![
         Spans::from(evaluation_message),
@@ -220,6 +306,7 @@ pub fn build_list_widget<'a>(
     items: &'a [String],
     separator_index: Option<usize>,
     select_flag: &'a str,
+    title: &'a str,
 ) -> List<'a> {
     let list: Vec<ListItem> = items
         .iter()
@@ -250,6 +337,6 @@ pub fn build_list_widget<'a>(
         .collect();
 
     return List::new(list)
-        .block(Block::default().borders(Borders::ALL).title("History"))
+        .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_symbol(select_flag);
 }

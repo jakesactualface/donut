@@ -1,10 +1,13 @@
+use crossterm::event::KeyEvent;
 use crossterm::terminal::SetTitle;
 use donut::ui::widget::{
-    build_list_widget, build_message_widget, build_paragraph_widget, HistoryList, InputBox,
+    build_help_widget, build_list_widget, build_message_widget, build_paragraph_widget,
+    HistoryList, InputBox,
 };
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::{error::Error, io};
+use tui::layout::Rect;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
@@ -14,6 +17,7 @@ use crossterm::{
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout},
+    widgets::Clear,
     Frame, Terminal,
 };
 
@@ -25,6 +29,11 @@ struct Repl {
     last_eval: String,
     interpreter: Interpreter,
     outputs: HistoryList,
+    active_popup: Option<Popup>,
+}
+
+enum Popup {
+    Help,
 }
 
 impl Repl {
@@ -35,6 +44,7 @@ impl Repl {
             last_eval: String::new(),
             interpreter: Interpreter::new(),
             outputs: HistoryList::new(),
+            active_popup: None,
         }
     }
 
@@ -82,7 +92,7 @@ impl Repl {
         self.last_eval.clear();
     }
 
-    fn evaluate_file(&mut self) {
+    fn import_file(&mut self) {
         if self.input.is_empty() {
             return;
         }
@@ -124,59 +134,74 @@ fn run<B: Backend>(terminal: &mut Terminal<B>, mut repl: Repl) -> io::Result<()>
         terminal.draw(|f| ui(f, &mut repl))?;
 
         if let Event::Key(key) = event::read()? {
-            match (key.code, key.modifiers) {
-                (KeyCode::Enter, KeyModifiers::NONE) => {
-                    repl.push_unevaluated();
-                }
-                (KeyCode::Char('e'), KeyModifiers::CONTROL) => {
-                    repl.evaluate();
-                }
-                (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                    if let Some(command) = repl.command_history.get_selected() {
-                        repl.input.set(command.clone());
-                    } else {
-                        repl.input.clear();
-                    }
-                }
-                (KeyCode::Char('x'), KeyModifiers::CONTROL) => {
-                    repl.pop_unevaluated();
-                }
-                (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
-                    repl.delete_unevaluated();
-                }
-                (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
-                    repl.evaluate_file();
-                }
-                (KeyCode::Up, KeyModifiers::NONE) => {
-                    repl.command_history.previous();
-                }
-                (KeyCode::Down, KeyModifiers::NONE) => {
-                    repl.command_history.next();
-                }
-                (KeyCode::Left, KeyModifiers::NONE) => {
-                    repl.input.move_cursor(-1);
-                }
-                (KeyCode::Right, KeyModifiers::NONE) => {
-                    repl.input.move_cursor(1);
-                }
-                (KeyCode::Home, KeyModifiers::NONE) => {
-                    repl.input.cursor_to_start();
-                }
-                (KeyCode::End, KeyModifiers::NONE) => {
-                    repl.input.cursor_to_end();
-                }
-                (KeyCode::Esc, _) => {
-                    return Ok(());
-                }
-                (KeyCode::Char(c), _) => {
-                    repl.input.insert(c);
-                }
-                (KeyCode::Backspace, _) => {
-                    repl.input.remove();
-                }
-                _ => (),
+            if key.code == KeyCode::Esc {
+                return Ok(());
+            }
+
+            if repl.active_popup.is_none() {
+                // Other keybinds are only active when a popup is not active
+                resolve_key_primary(key, &mut repl);
+            } else {
+                // Any keypress will remove an active popup
+                repl.active_popup = None;
+                continue;
             }
         }
+    }
+}
+
+fn resolve_key_primary(key: KeyEvent, repl: &mut Repl) {
+    match (key.code, key.modifiers) {
+        (KeyCode::Char('h'), KeyModifiers::CONTROL) => {
+            repl.active_popup = Some(Popup::Help);
+        }
+        (KeyCode::Enter, KeyModifiers::NONE) => {
+            repl.push_unevaluated();
+        }
+        (KeyCode::Char('e'), KeyModifiers::CONTROL) => {
+            repl.evaluate();
+        }
+        (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+            if let Some(command) = repl.command_history.get_selected() {
+                repl.input.set(command.clone());
+            } else {
+                repl.input.clear();
+            }
+        }
+        (KeyCode::Char('x'), KeyModifiers::CONTROL) => {
+            repl.pop_unevaluated();
+        }
+        (KeyCode::Char('d'), KeyModifiers::CONTROL) => {
+            repl.delete_unevaluated();
+        }
+        (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
+            repl.import_file();
+        }
+        (KeyCode::Up, KeyModifiers::NONE) => {
+            repl.command_history.previous();
+        }
+        (KeyCode::Down, KeyModifiers::NONE) => {
+            repl.command_history.next();
+        }
+        (KeyCode::Left, KeyModifiers::NONE) => {
+            repl.input.move_cursor(-1);
+        }
+        (KeyCode::Right, KeyModifiers::NONE) => {
+            repl.input.move_cursor(1);
+        }
+        (KeyCode::Home, KeyModifiers::NONE) => {
+            repl.input.cursor_to_start();
+        }
+        (KeyCode::End, KeyModifiers::NONE) => {
+            repl.input.cursor_to_end();
+        }
+        (KeyCode::Char(c), _) => {
+            repl.input.insert(c);
+        }
+        (KeyCode::Backspace, _) => {
+            repl.input.remove();
+        }
+        _ => (),
     }
 }
 
@@ -192,7 +217,7 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &mut Repl) {
         .margin(1)
         .constraints(
             [
-                Constraint::Length(2),
+                Constraint::Max(2),
                 Constraint::Length(3),
                 Constraint::Ratio(2, 3),
                 Constraint::Length(2),
@@ -219,6 +244,7 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &mut Repl) {
             &repl.command_history.items,
             Some(repl.command_history.eval_index),
             ">> ",
+            "History",
         ),
         chunks[2],
         &mut repl.command_history.state,
@@ -230,8 +256,43 @@ fn ui<B: Backend>(frame: &mut Frame<B>, repl: &mut Repl) {
     );
 
     frame.render_stateful_widget(
-        build_list_widget(&repl.outputs.items, None, ""),
+        build_list_widget(&repl.outputs.items, None, "", "Output"),
         output_chunk[0],
         &mut repl.outputs.state,
     );
+
+    match repl.active_popup {
+        Some(Popup::Help) => {
+            let popup_area = centered_rect(90, 90, frame.size());
+            frame.render_widget(Clear, popup_area);
+            frame.render_widget(build_help_widget(), popup_area)
+        }
+        None => (),
+    }
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1]
 }
