@@ -160,6 +160,7 @@ static KEYWORDS: phf::Map<&'static str, Token> = phf::phf_map! {
     "while" => Token::While,
     "return" => Token::Return,
     "macro" => Token::Macro,
+    "sprinkle" => Token::Sprinkle,
 };
 
 fn is_word_char(c: &char) -> bool {
@@ -235,6 +236,7 @@ mod tests {
             while (true) { mut a = a + 1; };
             true && true;
             false || false;
+            sprinkle(\"resources/test/sprinkle1.donut\");
         ";
         let expected = vec![
             Token::Let,
@@ -365,6 +367,11 @@ mod tests {
             Token::False,
             Token::Or,
             Token::False,
+            Token::Semicolon,
+            Token::Sprinkle,
+            Token::LParen,
+            Token::String(String::from("resources/test/sprinkle1.donut")),
+            Token::RParen,
             Token::Semicolon,
         ];
         assert_tokens(expected, Lexer::new(input));

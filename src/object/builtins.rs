@@ -1,10 +1,6 @@
-use std::{
-    cmp::Ordering,
-    fs::File,
-    io::{BufRead, BufReader, Lines, Result},
-    path::Path,
-    sync::Mutex,
-};
+use std::{cmp::Ordering, sync::Mutex};
+
+use crate::read_lines;
 
 use super::types::Object::{self, Error, Integer, Null};
 
@@ -70,14 +66,6 @@ fn file_lines_builtin(objects: &[Object]) -> Object {
         }
         x => Error(format!("Argument to `fileLines` not supported: {x:?}")),
     }
-}
-
-fn read_lines<P>(filename: P) -> Result<Lines<BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(filename)?;
-    Ok(BufReader::new(file).lines())
 }
 
 fn first_builtin(objects: &[Object]) -> Object {

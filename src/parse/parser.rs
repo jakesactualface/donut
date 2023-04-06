@@ -4,8 +4,8 @@ use std::{
     mem::{discriminant, Discriminant},
 };
 
-use crate::token::types::Token;
 use crate::token::{lexer::Lexer, types::Precedence};
+use crate::{read_lines, token::types::Token};
 
 use super::ast::{Expression, Program, Statement};
 
@@ -118,9 +118,60 @@ impl<'a> Parser<'a> {
 
     fn parse_statement(&mut self) -> Option<Statement> {
         match self.current {
+            Some(Token::Sprinkle) => self.parse_sprinkle_statement(),
             Some(Token::Let) => self.parse_let_statement(),
             Some(Token::Return) => self.parse_return_statement(),
             _ => self.parse_expression_statement(),
+        }
+    }
+
+    fn parse_sprinkle_statement(&mut self) -> Option<Statement> {
+        let filepath: String;
+
+        if !self.expect_peek(Token::LParen) {
+            return None;
+        }
+
+        if let Some(Token::String(value)) = self.lexer.peek() {
+            filepath = value.clone();
+            self.next();
+        } else {
+            self.errors
+                .push(String::from("Expected filepath for sprinkle!"));
+            return None;
+        }
+
+        if !self.expect_peek(Token::RParen) {
+            return None;
+        }
+
+        if Some(&Token::Semicolon) == self.lexer.peek() {
+            self.next();
+        }
+
+        self.parse_external_program(filepath)
+    }
+
+    fn parse_external_program(&mut self, filename: String) -> Option<Statement> {
+        let error = format!("Error encountered while parsing file: {filename}");
+
+        if let Ok(lines_iter) = read_lines(filename) {
+            let combined_lines: String =
+                lines_iter.filter_map(|s| s.ok()).map(|s| s + " ").collect();
+            let mut parser = Parser::new(Lexer::new(&combined_lines));
+            let program = parser.parse_program();
+
+            if !parser.errors.is_empty() {
+                self.errors.push(error);
+                return None;
+            }
+
+            Some(Statement::Block {
+                statements: program.statements,
+            })
+        } else {
+            self.errors.push(error);
+            None
         }
     }
 
@@ -650,6 +701,8 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use crate::{
         parse::ast::{Expression, Statement},
         token::{
@@ -745,7 +798,7 @@ mod tests {
         }
     }
 
-    fn assert_statement_scenarios(scenario: &&str, expected_statement: &Statement) {
+    fn assert_statement_scenarios(scenario: &str, expected_statement: &Statement) {
         let lexer = Lexer::new(scenario);
         let mut parser = Parser::new(lexer);
 
@@ -760,7 +813,15 @@ mod tests {
         );
     }
 
-    fn assert_expression_scenarios(scenario: &&str, expected_expressions: &Vec<Expression>) {
+    fn assert_statement_errors(scenario: &str, expected_errors: Vec<String>) {
+        let lexer = Lexer::new(scenario);
+        let mut parser = Parser::new(lexer);
+
+        parser.parse_program();
+        assert_eq!(expected_errors, parser.errors);
+    }
+
+    fn assert_expression_scenarios(scenario: &str, expected_expressions: &Vec<Expression>) {
         let lexer = Lexer::new(scenario);
         let mut parser = Parser::new(lexer);
 
@@ -1325,6 +1386,118 @@ mod tests {
         ];
         for (scenario, expected) in scenarios.iter() {
             assert_expression_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn sprinkle_statements() {
+        let mut filename_1 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        filename_1.push("resources/test/sprinkle1.donut");
+        let mut filename_2 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        filename_2.push("resources/test/sprinkle2.donut");
+
+        let sprinkle_1 = format!(r#"sprinkle("{}");"#, filename_1.display());
+        let sprinkle_2 = format!(r#"sprinkle("{}");"#, filename_2.display());
+
+        let scenarios = vec![
+            (
+                sprinkle_1.as_str(),
+                Statement::Block {
+                    statements: vec![
+                        Statement::Let {
+                            name: String::from("a"),
+                            value: int(1),
+                        },
+                        Statement::Let {
+                            name: String::from("b"),
+                            value: int(2),
+                        },
+                        Statement::Let {
+                            name: String::from("add"),
+                            value: fn_literal(
+                                vec![ident("x"), ident("y")],
+                                vec![Statement::Return {
+                                    value: infix(ident("x"), Plus, ident("y")),
+                                }],
+                            ),
+                        },
+                        Statement::Let {
+                            name: String::from("c"),
+                            value: call(ident("add"), vec![ident("a"), ident("b")]),
+                        },
+                    ],
+                },
+            ),
+            (
+                sprinkle_2.as_str(),
+                Statement::Block {
+                    statements: vec![
+                        Statement::Block {
+                            statements: vec![
+                                Statement::Let {
+                                    name: String::from("a"),
+                                    value: int(1),
+                                },
+                                Statement::Let {
+                                    name: String::from("b"),
+                                    value: int(2),
+                                },
+                                Statement::Let {
+                                    name: String::from("add"),
+                                    value: fn_literal(
+                                        vec![ident("x"), ident("y")],
+                                        vec![Statement::Return {
+                                            value: infix(ident("x"), Plus, ident("y")),
+                                        }],
+                                    ),
+                                },
+                                Statement::Let {
+                                    name: String::from("c"),
+                                    value: call(ident("add"), vec![ident("a"), ident("b")]),
+                                },
+                            ],
+                        },
+                        Statement::Let {
+                            name: String::from("d"),
+                            value: int(4),
+                        },
+                        Statement::Let {
+                            name: String::from("e"),
+                            value: call(ident("add"), vec![ident("c"), ident("d")]),
+                        },
+                    ],
+                },
+            ),
+        ];
+        for (scenario, expected) in scenarios.iter() {
+            assert_statement_scenarios(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn invalid_sprinkle_statements() {
+        let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        filename.push("resources/test/sprinkleInvalid.donut");
+        let sprinkle = format!(r#"sprinkle("{}");"#, filename.display());
+
+        let scenarios = vec![
+            (
+                r#"sprinkle("does/not/exist");"#,
+                vec![String::from(
+                    "Error encountered while parsing file: does/not/exist",
+                )],
+            ),
+            (
+                sprinkle.as_str(),
+                vec![format!(
+                    "Error encountered while parsing file: {}",
+                    filename.display()
+                )],
+            ),
+        ];
+
+        for (scenario, expected_errors) in scenarios.into_iter() {
+            assert_statement_errors(scenario, expected_errors)
         }
     }
 }

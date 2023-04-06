@@ -1,0 +1,5 @@
+sprinkle("resources/test/sprinkle1.donut");
+
+let d = 4;
+
+let e = add(c, d);

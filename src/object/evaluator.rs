@@ -414,6 +414,7 @@ fn eval_call_expression(
         return evaluated;
     }
 
+    // Some builtin functions must be handled separately to access enviornment
     if let Builtin(builtin_name) = &evaluated {
         match builtin_name.as_str() {
             "defined" => {
@@ -561,7 +562,7 @@ fn eval_mutation_expression(
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, collections::HashMap, rc::Rc};
+    use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
 
     use crate::{
         object::{
@@ -1286,6 +1287,25 @@ mod tests {
         ];
         for (scenario, expected) in scenarios.into_iter() {
             assert_multiple_objects_scenario(scenario, expected);
+        }
+    }
+
+    #[test]
+    fn sprinkle() {
+        let mut filename_1 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        filename_1.push("resources/test/sprinkle1.donut");
+        let mut filename_2 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        filename_2.push("resources/test/sprinkle2.donut");
+
+        let sprinkle_1 = format!(r#"sprinkle("{}"); c"#, filename_1.display());
+        let sprinkle_2 = format!(r#"sprinkle("{}"); e"#, filename_2.display());
+
+        let scenarios = vec![
+            (sprinkle_1.as_str(), Integer(3)),
+            (sprinkle_2.as_str(), Integer(7)),
+        ];
+        for (scenario, expected) in scenarios.into_iter() {
+            assert_object_scenario(scenario, expected);
         }
     }
 }

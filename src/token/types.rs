@@ -38,6 +38,7 @@ pub enum Token {
     Return,
     Illegal,
     Macro,
+    Sprinkle,
 }
 
 #[derive(Clone, PartialEq, PartialOrd)]

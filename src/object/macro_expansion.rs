@@ -9,8 +9,7 @@ use super::{
 };
 
 pub fn define_macros(program: &mut Program, env: Rc<RefCell<Environment>>) {
-    let mut definitions: Vec<usize> = vec![];
-    for (i, statement) in program.statements.iter().enumerate() {
+    program.statements.iter().for_each(|statement| {
         if let Statement::Let {
             name,
             value: Expression::Macro { parameters, body },
@@ -25,9 +24,8 @@ pub fn define_macros(program: &mut Program, env: Rc<RefCell<Environment>>) {
                     env: env.clone(),
                 },
             );
-            definitions.push(i);
         }
-    }
+    });
     program.statements = program
         .statements
         .clone()
