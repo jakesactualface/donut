@@ -1297,8 +1297,8 @@ mod tests {
         let mut filename_2 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         filename_2.push("resources/test/sprinkle2.donut");
 
-        let sprinkle_1 = format!(r#"sprinkle("{}"); c"#, filename_1.display());
-        let sprinkle_2 = format!(r#"sprinkle("{}"); e"#, filename_2.display());
+        let sprinkle_1 = format!(r#"sprinkle "{}"; c"#, filename_1.display());
+        let sprinkle_2 = format!(r#"sprinkle "{}"; e"#, filename_2.display());
 
         let scenarios = vec![
             (sprinkle_1.as_str(), Integer(3)),

@@ -128,20 +128,12 @@ impl<'a> Parser<'a> {
     fn parse_sprinkle_statement(&mut self) -> Option<Statement> {
         let filepath: String;
 
-        if !self.expect_peek(Token::LParen) {
-            return None;
-        }
-
         if let Some(Token::String(value)) = self.lexer.peek() {
             filepath = value.clone();
             self.next();
         } else {
             self.errors
                 .push(String::from("Expected filepath for sprinkle!"));
-            return None;
-        }
-
-        if !self.expect_peek(Token::RParen) {
             return None;
         }
 
@@ -1396,8 +1388,8 @@ mod tests {
         let mut filename_2 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         filename_2.push("resources/test/sprinkle2.donut");
 
-        let sprinkle_1 = format!(r#"sprinkle("{}");"#, filename_1.display());
-        let sprinkle_2 = format!(r#"sprinkle("{}");"#, filename_2.display());
+        let sprinkle_1 = format!(r#"sprinkle "{}";"#, filename_1.display());
+        let sprinkle_2 = format!(r#"sprinkle "{}";"#, filename_2.display());
 
         let scenarios = vec![
             (
@@ -1478,11 +1470,11 @@ mod tests {
     fn invalid_sprinkle_statements() {
         let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         filename.push("resources/test/sprinkleInvalid.donut");
-        let sprinkle = format!(r#"sprinkle("{}");"#, filename.display());
+        let sprinkle = format!(r#"sprinkle "{}";"#, filename.display());
 
         let scenarios = vec![
             (
-                r#"sprinkle("does/not/exist");"#,
+                r#"sprinkle "does/not/exist";"#,
                 vec![String::from(
                     "Error encountered while parsing file: does/not/exist",
                 )],

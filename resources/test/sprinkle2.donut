@@ -1,4 +1,4 @@
-sprinkle("resources/test/sprinkle1.donut");
+sprinkle "resources/test/sprinkle1.donut";
 
 let d = 4;
 
