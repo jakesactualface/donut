@@ -301,7 +301,7 @@ pub fn build_message_widget<'a>() -> Paragraph<'a> {
 pub fn build_paragraph_widget<'a>(input: &'a str, title: &'a str) -> Paragraph<'a> {
     return Paragraph::new(input)
         .block(Block::default().borders(Borders::ALL).title(title))
-        .wrap(tui::widgets::Wrap { trim: true });
+        .wrap(tui::widgets::Wrap { trim: false });
 }
 
 pub fn build_list_widget<'a>(
