@@ -244,7 +244,7 @@ pub fn build_help_widget<'a>() -> Paragraph<'a> {
         ],
         vec![
             Span::raw("        "),
-            Span::styled("Ctrl+c", Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)),
+            Span::styled("Ctrl+x", Style::default().add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)),
             Span::raw(": Overwrites the contents of the "),
             Span::styled("Input", Style::default().add_modifier(Modifier::BOLD)),
             Span::raw(" panel with the contents of the selected line, and also removes that line if it has not been executed."),
